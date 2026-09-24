@@ -272,7 +272,8 @@ export const PrototypeScreen: React.FC = () => {
   const criticalCount = criticalItems.length;
 
   // 1. Mal Kabul İşlemi (Stoğu Arttırır)
-  const handleConfirmMalKabul = () => {
+  // 1.a Sadece Stoğa Ekle (Yazdırma Yapmaz)
+  const handleOnlyAddStock = () => {
     const targetId = mkMaterialId || selectedMaterial?.id || 'AMB-001';
     const qtyNum = Number(mkQty);
     if (!qtyNum || qtyNum <= 0) {
@@ -306,7 +307,52 @@ export const PrototypeScreen: React.FC = () => {
         type: 'GİRİŞ',
         qty: qtyNum,
         unit: targetMat?.unit || 'Adet',
-        detail: `Parti: ${mkLot} • İrsaliye Kabul Edildi`,
+        detail: `Parti: ${mkLot} • Stoğa Eklendi`,
+      },
+      ...prev,
+    ]);
+
+    setShowMalKabulModal(false);
+    setShowPreviewInsideModal(false);
+    alert(`✅ ${targetMat?.name} stoğuna ${qtyNum} ${targetMat?.unit} başarıyla eklendi.`);
+  };
+
+  // 1.b Stoğa Ekle ve QR Etiketini Bas (Yazıcı Penceresini Açar)
+  const handleConfirmMalKabulAndPrint = () => {
+    const targetId = mkMaterialId || selectedMaterial?.id || 'AMB-001';
+    const qtyNum = Number(mkQty);
+    if (!qtyNum || qtyNum <= 0) {
+      alert('Lütfen geçerli bir miktar giriniz.');
+      return;
+    }
+
+    const nowStr = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    setMaterials((prev) =>
+      prev.map((item) => {
+        if (item.id === targetId) {
+          const newStock = item.currentStock + qtyNum;
+          return {
+            ...item,
+            currentStock: newStock,
+            lastMovement: `Bugün ${nowStr} • Mal Kabul (+${qtyNum})`,
+            lotNo: mkLot || item.lotNo,
+            isCritical: newStock < item.minStock,
+          };
+        }
+        return item;
+      }),
+    );
+
+    const targetMat = materials.find((m) => m.id === targetId);
+    setLogs((prev) => [
+      {
+        id: `log-${Date.now()}`,
+        time: nowStr,
+        materialName: targetMat?.name || 'Ürün',
+        type: 'GİRİŞ',
+        qty: qtyNum,
+        unit: targetMat?.unit || 'Adet',
+        detail: `Parti: ${mkLot} • Etiket Basıldı`,
       },
       ...prev,
     ]);
@@ -318,7 +364,6 @@ export const PrototypeScreen: React.FC = () => {
     }
     setShowPrintLabelModal(true);
 
-    // Otomatik yazıcı penceresini tetikle
     setTimeout(() => {
       window.print();
     }, 350);
@@ -1204,16 +1249,23 @@ export const PrototypeScreen: React.FC = () => {
             <div className="px-5 py-3.5 bg-zinc-50 border-t border-zinc-100 flex items-center justify-end gap-2">
               <button
                 onClick={() => setShowMalKabulModal(false)}
-                className="px-3.5 py-1.5 text-xs text-zinc-600 hover:text-zinc-900"
+                className="px-3.5 py-1.5 text-xs text-zinc-600 hover:text-zinc-900 transition"
               >
                 İptal
               </button>
               <button
-                onClick={handleConfirmMalKabul}
+                onClick={handleOnlyAddStock}
+                className="px-4 py-1.5 rounded-lg bg-white border border-zinc-200 hover:bg-zinc-100 text-zinc-800 text-xs font-medium shadow-xs transition flex items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5 text-zinc-600" />
+                <span>Stoğa Ekle</span>
+              </button>
+              <button
+                onClick={handleConfirmMalKabulAndPrint}
                 className="px-4 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium shadow-xs transition flex items-center gap-1.5"
               >
                 <Printer className="w-3.5 h-3.5" />
-                <span>Stoğa Ekle & Etiketi Bas</span>
+                <span>Stoğa Ekle & QR Bas</span>
               </button>
             </div>
           </div>
