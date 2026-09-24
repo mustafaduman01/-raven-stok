@@ -25,6 +25,11 @@ import {
   AlertTriangle,
   RefreshCw,
   ExternalLink,
+  FileSpreadsheet,
+  UserCheck,
+  BarChart3,
+  ChevronDown,
+  Shield,
 } from 'lucide-react';
 
 interface Material {
@@ -230,6 +235,29 @@ export const PrototypeScreen: React.FC = () => {
   const [mobileScannedItem, setMobileScannedItem] = useState<Material | null>(null);
   const [mobileFeedback, setMobileFeedback] = useState<string | null>(null);
 
+  // Rol Simülasyonu (Depo, Üretim Şefi, Fabrika Müdürü)
+  type UserRole = 'DEPO' | 'URETIM' | 'MUDUR';
+  const [currentRole, setCurrentRole] = useState<UserRole>('DEPO');
+  const [showRoleDropdown, setShowRoleDropdown] = useState(false);
+
+  // Yeni Malzeme Kartı Modalı State'leri
+  const [showNewMaterialModal, setShowNewMaterialModal] = useState(false);
+  const [newMatName, setNewMatName] = useState('');
+  const [newMatCategory, setNewMatCategory] = useState<'AMBALAJ' | 'HAMMADDE'>('AMBALAJ');
+  const [newMatUnit, setNewMatUnit] = useState('Adet');
+  const [newMatStock, setNewMatStock] = useState('500');
+  const [newMatMinStock, setNewMatMinStock] = useState('150');
+  const [newMatLocation, setNewMatLocation] = useState('Depo A • Göz 05');
+  const [newMatSupplier, setNewMatSupplier] = useState('');
+  const [newMatLot, setNewMatLot] = useState('LOT-2026-N01');
+
+  // FEFO & Gıda Güvenliği / Parti İzlenebilirlik Modalı
+  const [showFefoModal, setShowFefoModal] = useState(false);
+  const [fefoMaterial, setFefoMaterial] = useState<Material | null>(null);
+
+  // Günlük Fire & Zayiat Analiz Raporu Modalı
+  const [showWasteReportModal, setShowWasteReportModal] = useState(false);
+
   // QR Kod Üretici (Gerçek QRCode Kütüphanesi ile)
   useEffect(() => {
     const activeItem = selectedMaterial || materials.find((m) => m.id === mkMaterialId) || materials[0];
@@ -271,9 +299,111 @@ export const PrototypeScreen: React.FC = () => {
   const criticalItems = materials.filter((m) => m.currentStock < m.minStock);
   const criticalCount = criticalItems.length;
 
+  // 0. Excel / CSV Dışa Aktarma (Türkçe Karakter Uyumlu BOM ile)
+  const handleExportCSV = () => {
+    const headers = [
+      'Malzeme Kodu',
+      'Malzeme Adı',
+      'Kategori',
+      'Birim',
+      'Mevcut Stok',
+      'Kritik Asgari Eşik',
+      'Stok Durumu',
+      'Depo / Raf Konumu',
+      'Parti / Lot No',
+      'Tedarikçi Firma',
+      'Son Hareket Detayı',
+    ];
+
+    const rows = filteredMaterials.map((m) => [
+      `"${m.id}"`,
+      `"${m.name.replace(/"/g, '""')}"`,
+      `"${m.category}"`,
+      `"${m.unit}"`,
+      m.currentStock,
+      m.minStock,
+      m.currentStock < m.minStock ? '"KRİTİK EŞİK ALTI"' : '"YETERLİ"',
+      `"${m.location.replace(/"/g, '""')}"`,
+      `"${(m.lotNo || '-').replace(/"/g, '""')}"`,
+      `"${(m.supplier || '-').replace(/"/g, '""')}"`,
+      `"${m.lastMovement.replace(/"/g, '""')}"`,
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const dateStr = new Date().toLocaleDateString('tr-TR').replace(/\./g, '-');
+    link.setAttribute('download', `raven-stok-envanter-${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // 0.b Yeni Malzeme Kartı Oluşturma
+  const handleCreateMaterial = () => {
+    if (currentRole !== 'DEPO') {
+      alert('⚠️ Yetki Hatası: Yeni malzeme tanımlama yetkisi yalnızca Depo Sorumlusu rolüne aittir.');
+      return;
+    }
+    if (!newMatName.trim()) {
+      alert('Lütfen malzeme adını giriniz.');
+      return;
+    }
+
+    const prefix = newMatCategory === 'AMBALAJ' ? 'AMB' : 'HAM';
+    const sameCatCount = materials.filter((m) => m.category === newMatCategory).length + 1;
+    const nextId = `${prefix}-00${sameCatCount}`;
+    const stockNum = Number(newMatStock) || 0;
+    const minStockNum = Number(newMatMinStock) || 50;
+
+    const newMaterial: Material = {
+      id: nextId,
+      name: newMatName.trim(),
+      category: newMatCategory,
+      unit: newMatUnit,
+      currentStock: stockNum,
+      minStock: minStockNum,
+      lastMovement: 'Yeni Malzeme Kartı Açıldı',
+      location: newMatLocation.trim() || 'Depo Genel',
+      supplier: newMatSupplier.trim() || 'Doğrudan Tedarik',
+      lotNo: newMatLot.trim() || `LOT-${new Date().getFullYear()}-01`,
+      isCritical: stockNum < minStockNum,
+    };
+
+    setMaterials((prev) => [newMaterial, ...prev]);
+    setLogs((prev) => [
+      {
+        id: `log-${Date.now()}-new`,
+        time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+        materialName: newMaterial.name,
+        type: 'GİRİŞ',
+        qty: stockNum,
+        unit: newMaterial.unit,
+        detail: `Yeni Kart Oluşturuldu • ${newMaterial.id} • ${newMaterial.location}`,
+      },
+      ...prev,
+    ]);
+
+    setShowNewMaterialModal(false);
+    setNewMatName('');
+    alert(`✅ Yeni malzeme kartı sisteme kaydedildi: ${newMaterial.name} (${newMaterial.id})`);
+  };
+
   // 1. Mal Kabul İşlemi (Stoğu Arttırır)
   // 1.a Sadece Stoğa Ekle (Yazdırma Yapmaz)
   const handleOnlyAddStock = () => {
+    if (currentRole === 'URETIM') {
+      alert('⚠️ Yetki Sınırı: Mal kabul işlemi yalnızca Depo Sorumlusu tarafından yapılabilir. (Aktif Profil: Üretim Şefi)');
+      return;
+    }
+    if (currentRole === 'MUDUR') {
+      alert('🔒 Salt-Okunur Mod: Fabrika Müdürü profili stok verisi ekleyemez veya değiştiremez.');
+      return;
+    }
+
     const targetId = mkMaterialId || selectedMaterial?.id || 'AMB-001';
     const qtyNum = Number(mkQty);
     if (!qtyNum || qtyNum <= 0) {
@@ -319,6 +449,15 @@ export const PrototypeScreen: React.FC = () => {
 
   // 1.b Stoğa Ekle ve QR Etiketini Bas (Yazıcı Penceresini Açar)
   const handleConfirmMalKabulAndPrint = () => {
+    if (currentRole === 'URETIM') {
+      alert('⚠️ Yetki Sınırı: Mal kabul işlemi yalnızca Depo Sorumlusu tarafından yapılabilir. (Aktif Profil: Üretim Şefi)');
+      return;
+    }
+    if (currentRole === 'MUDUR') {
+      alert('🔒 Salt-Okunur Mod: Fabrika Müdürü profili stok verisi ekleyemez veya değiştiremez.');
+      return;
+    }
+
     const targetId = mkMaterialId || selectedMaterial?.id || 'AMB-001';
     const qtyNum = Number(mkQty);
     if (!qtyNum || qtyNum <= 0) {
@@ -371,6 +510,11 @@ export const PrototypeScreen: React.FC = () => {
 
   // 2. Üretime Sevk Çıkışı (Stoğu Azaltır)
   const handleConfirmExit = () => {
+    if (currentRole === 'MUDUR') {
+      alert('🔒 Salt-Okunur Mod: Fabrika Müdürü profili stok sevki yapamaz. Yalnızca izleme yetkisine sahiptir.');
+      return;
+    }
+
     const targetId = sevkMaterialId || selectedMaterial?.id || 'AMB-001';
     const qtyNum = Number(exitQty);
     if (!qtyNum || qtyNum <= 0) {
@@ -421,6 +565,11 @@ export const PrototypeScreen: React.FC = () => {
   const calculatedWaste = Math.max(0, Number(returnIssuedQty) - Number(returnGoodQty));
 
   const handleConfirmReturn = () => {
+    if (currentRole === 'MUDUR') {
+      alert('🔒 Salt-Okunur Mod: Fabrika Müdürü profili iade ve fire kaydı giremez.');
+      return;
+    }
+
     const targetId = sevkMaterialId || selectedMaterial?.id || 'AMB-001';
     const goodNum = Number(returnGoodQty);
     const nowStr = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
@@ -647,12 +796,91 @@ export const PrototypeScreen: React.FC = () => {
               )}
             </div>
 
-            {/* Kullanıcı Rozeti */}
-            <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-full bg-zinc-50 border border-zinc-200/80 text-xs text-zinc-600">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 ring-2 ring-emerald-500/20"></span>
-              <span className="text-[11px]">
-                Giriş Yapan: <strong className="font-semibold text-zinc-800">Depo Sorumlusu (Yetkili)</strong>
-              </span>
+            {/* Kullanıcı / Rol Değiştirme Simülasyonu */}
+            <div className="relative">
+              <button
+                onClick={() => setShowRoleDropdown(!showRoleDropdown)}
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-zinc-50 hover:bg-zinc-100 border border-zinc-200/80 text-xs text-zinc-700 transition cursor-pointer"
+                title="Kullanıcı Rolünü Değiştir"
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ring-2 ${
+                    currentRole === 'DEPO'
+                      ? 'bg-emerald-500 ring-emerald-500/20'
+                      : currentRole === 'URETIM'
+                      ? 'bg-blue-500 ring-blue-500/20'
+                      : 'bg-purple-500 ring-purple-500/20'
+                  }`}
+                ></span>
+                <span className="text-[11px]">
+                  Giriş:{' '}
+                  <strong className="font-semibold text-zinc-900">
+                    {currentRole === 'DEPO'
+                      ? 'Depo Sorumlusu'
+                      : currentRole === 'URETIM'
+                      ? 'Üretim Şefi'
+                      : 'Fabrika Müdürü'}
+                  </strong>
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
+              </button>
+
+              {/* Rol Seçim Menüsü */}
+              {showRoleDropdown && (
+                <div className="absolute right-0 mt-1 w-64 bg-white rounded-xl border border-zinc-200 shadow-xl p-1.5 z-50 text-xs">
+                  <div className="px-2 py-1 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider border-b border-zinc-100">
+                    Yetki & Rol Simülasyonu
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setCurrentRole('DEPO');
+                      setShowRoleDropdown(false);
+                    }}
+                    className={`w-full text-left p-2 rounded-lg flex items-start gap-2.5 transition mt-1 ${
+                      currentRole === 'DEPO' ? 'bg-zinc-100 font-medium' : 'hover:bg-zinc-50'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 mt-1 shrink-0"></span>
+                    <div>
+                      <div className="font-semibold text-zinc-900">Depo Sorumlusu (Yetkili)</div>
+                      <div className="text-[10px] text-zinc-500">Tam yetki: Mal kabul, sevk, QR etiket, yeni kart.</div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setCurrentRole('URETIM');
+                      setShowRoleDropdown(false);
+                    }}
+                    className={`w-full text-left p-2 rounded-lg flex items-start gap-2.5 transition ${
+                      currentRole === 'URETIM' ? 'bg-zinc-100 font-medium' : 'hover:bg-zinc-50'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-blue-500 mt-1 shrink-0"></span>
+                    <div>
+                      <div className="font-semibold text-zinc-900">Üretim Şefi (Hat)</div>
+                      <div className="text-[10px] text-zinc-500">Sadece üretime sevk ve sağlam iade/fire girişi.</div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setCurrentRole('MUDUR');
+                      setShowRoleDropdown(false);
+                    }}
+                    className={`w-full text-left p-2 rounded-lg flex items-start gap-2.5 transition ${
+                      currentRole === 'MUDUR' ? 'bg-zinc-100 font-medium' : 'hover:bg-zinc-50'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-purple-500 mt-1 shrink-0"></span>
+                    <div>
+                      <div className="font-semibold text-zinc-900">Fabrika Müdürü</div>
+                      <div className="text-[10px] text-zinc-500">Salt-okunur mod. Excel raporu, FEFO ve fire analizi.</div>
+                    </div>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Mobil Tarayıcı Simülatör Butonu */}
@@ -728,10 +956,19 @@ export const PrototypeScreen: React.FC = () => {
             <div className="text-[11px] text-emerald-600 mt-0.5">Üretim hatları aktif</div>
           </div>
 
-          <div className="bg-white p-3.5 rounded-xl border border-zinc-200/80 shadow-xs">
-            <div className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Hesaplanan Fire</div>
+          <div
+            onClick={() => setShowWasteReportModal(true)}
+            className="bg-white p-3.5 rounded-xl border border-zinc-200/80 shadow-xs cursor-pointer hover:border-zinc-300 hover:shadow-sm transition group"
+            title="Detaylı Fire ve Zayiat Analiz Raporunu İncele"
+          >
+            <div className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider flex items-center justify-between">
+              <span>Hesaplanan Fire</span>
+              <span className="text-[10px] text-zinc-400 group-hover:text-zinc-900 group-hover:underline font-semibold flex items-center gap-0.5">
+                Rapor ↗
+              </span>
+            </div>
             <div className="text-xl font-semibold text-zinc-900 mt-1">%1.2</div>
-            <div className="text-[11px] text-zinc-400 mt-0.5">Hedef eşik: &lt; %3.0</div>
+            <div className="text-[11px] text-zinc-400 mt-0.5">Hedef: &lt; %3.0 (Tıkla & İncele)</div>
           </div>
         </div>
 
@@ -771,7 +1008,7 @@ export const PrototypeScreen: React.FC = () => {
               }`}
             >
               <Layers className="w-3.5 h-3.5 text-zinc-500" />
-              <span>Ambalaj & Sarf (4)</span>
+              <span>Ambalaj & Sarf ({materials.filter((m) => m.category === 'AMBALAJ').length})</span>
             </button>
 
             <button
@@ -783,14 +1020,22 @@ export const PrototypeScreen: React.FC = () => {
               }`}
             >
               <Box className="w-3.5 h-3.5 text-zinc-500" />
-              <span>Hammadde Deposu (4)</span>
+              <span>Hammadde Deposu ({materials.filter((m) => m.category === 'HAMMADDE').length})</span>
             </button>
           </div>
 
           {/* Aksiyon Butonları */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => {
+                if (currentRole === 'URETIM') {
+                  alert('⚠️ Yetki Hatası: Mal kabul ve QR etiketleme yalnızca Depo Sorumlusu yetkisindedir. (Aktif Profil: Üretim Şefi)');
+                  return;
+                }
+                if (currentRole === 'MUDUR') {
+                  alert('🔒 Salt-Okunur Mod: Fabrika Müdürü profili stok verisi ekleyemez.');
+                  return;
+                }
                 const target = filteredMaterials[0] || materials[0];
                 setSelectedMaterial(target);
                 setMkMaterialId(target.id);
@@ -805,13 +1050,31 @@ export const PrototypeScreen: React.FC = () => {
 
             <button
               onClick={() => {
+                if (currentRole !== 'DEPO') {
+                  alert('⚠️ Yetki Hatası: Yeni malzeme tanımlama yetkisi yalnızca Depo Sorumlusu rolüne aittir.');
+                  return;
+                }
+                setShowNewMaterialModal(true);
+              }}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-zinc-50 text-zinc-800 border border-zinc-200/90 text-xs font-medium shadow-xs transition active:scale-98"
+            >
+              <Package className="w-3.5 h-3.5 text-zinc-600" />
+              <span>+ Yeni Malzeme</span>
+            </button>
+
+            <button
+              onClick={() => {
+                if (currentRole === 'MUDUR') {
+                  alert('🔒 Salt-Okunur Mod: Fabrika Müdürü profili stok sevki veya iadesi yapamaz.');
+                  return;
+                }
                 const target = filteredMaterials[0] || materials[0];
                 setSelectedMaterial(target);
                 setSevkMaterialId(target.id);
                 setSevkTab('EXIT');
                 setShowSevkModal(true);
               }}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-white hover:bg-zinc-50 text-zinc-800 border border-zinc-200/90 text-xs font-medium shadow-xs transition active:scale-98"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-zinc-50 text-zinc-800 border border-zinc-200/90 text-xs font-medium shadow-xs transition active:scale-98"
             >
               <ArrowUpRight className="w-3.5 h-3.5 text-zinc-500" />
               <span>Üretime Sevk / İade</span>
@@ -819,8 +1082,8 @@ export const PrototypeScreen: React.FC = () => {
           </div>
         </div>
 
-        {/* ARAMA ÇUBUĞU */}
-        <div className="bg-white p-2.5 rounded-xl border border-zinc-200/80 shadow-xs flex items-center justify-between gap-3">
+        {/* ARAMA ÇUBUĞU & EXCEL DIŞA AKTAR */}
+        <div className="bg-white p-2.5 rounded-xl border border-zinc-200/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="relative flex-1 max-w-sm">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
             <input
@@ -832,13 +1095,25 @@ export const PrototypeScreen: React.FC = () => {
             />
           </div>
 
-          <div className="text-[11px] text-zinc-500 flex items-center gap-3">
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Normal
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-rose-500"></span> Kritik Eşik Altı
-            </span>
+          <div className="flex items-center gap-3 justify-between sm:justify-end">
+            <div className="text-[11px] text-zinc-500 flex items-center gap-3">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Normal
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-rose-500"></span> Kritik Eşik Altı
+              </span>
+            </div>
+
+            {/* 1. EXCEL / CSV İNDİR BUTONU */}
+            <button
+              onClick={handleExportCSV}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 text-xs font-medium transition active:scale-98"
+              title="Mevcut stok listesini Excel uyumlu CSV olarak indir"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+              <span>Excel / CSV İndir</span>
+            </button>
           </div>
         </div>
 
@@ -888,8 +1163,19 @@ export const PrototypeScreen: React.FC = () => {
                                 </span>
                               )}
                             </div>
-                            <div className="text-[11px] text-zinc-400 font-mono mt-0.5">
-                              {item.id} {item.lotNo && `• ${item.lotNo}`}
+                            <div className="text-[11px] text-zinc-400 font-mono mt-0.5 flex items-center gap-1.5 flex-wrap">
+                              <span>{item.id} {item.lotNo && `• ${item.lotNo}`}</span>
+                              <button
+                                onClick={() => {
+                                  setFefoMaterial(item);
+                                  setShowFefoModal(true);
+                                }}
+                                className="inline-flex items-center gap-1 text-[10px] text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200/80 px-1.5 py-0.5 rounded font-sans font-medium transition cursor-pointer"
+                                title="Gıda Güvenliği, FEFO & Parti İzlenebilirlik Kartını İncele"
+                              >
+                                <ShieldCheck className="w-3 h-3 text-blue-600" />
+                                <span>FEFO İzle</span>
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -946,6 +1232,14 @@ export const PrototypeScreen: React.FC = () => {
                           {/* Hızlı Mal Kabul */}
                           <button
                             onClick={() => {
+                              if (currentRole === 'URETIM') {
+                                alert('⚠️ Yetki Hatası: Mal kabul ve QR etiketleme yalnızca Depo Sorumlusu yetkisindedir. (Aktif Profil: Üretim Şefi)');
+                                return;
+                              }
+                              if (currentRole === 'MUDUR') {
+                                alert('🔒 Salt-Okunur Mod: Fabrika Müdürü profili stok verisi ekleyemez.');
+                                return;
+                              }
                               setSelectedMaterial(item);
                               setMkMaterialId(item.id);
                               setShowPreviewInsideModal(false);
@@ -960,6 +1254,10 @@ export const PrototypeScreen: React.FC = () => {
                           {/* Üretime Sevk / İade */}
                           <button
                             onClick={() => {
+                              if (currentRole === 'MUDUR') {
+                                alert('🔒 Salt-Okunur Mod: Fabrika Müdürü profili üretim sevki veya iade yapamaz.');
+                                return;
+                              }
                               setSelectedMaterial(item);
                               setSevkMaterialId(item.id);
                               setSevkTab('EXIT');
@@ -1562,6 +1860,419 @@ export const PrototypeScreen: React.FC = () => {
 
             <div className="text-[9px] text-zinc-500 text-center">
               Aksiyonlar ana tablonun stoğunu anlık değiştirir.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: YENİ MALZEME KARTI AÇMA */}
+      {showNewMaterialModal && (
+        <div className="fixed inset-0 z-50 bg-zinc-950/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-zinc-200 rounded-2xl w-full max-w-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+            <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Package className="w-4 h-4 text-zinc-800" />
+                <h3 className="font-semibold text-zinc-900 text-sm">Yeni Malzeme Kartı Tanımla</h3>
+              </div>
+              <button
+                onClick={() => setShowNewMaterialModal(false)}
+                className="text-zinc-400 hover:text-zinc-700 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3.5 text-xs">
+              <div>
+                <label className="block text-xs font-medium text-zinc-700 mb-1">
+                  Malzeme Adı & Tanımı <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Örn: 250gr Süzme Peynir Kabı veya Termize Süt"
+                  value={newMatName}
+                  onChange={(e) => setNewMatName(e.target.value)}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-xs text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-zinc-400"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 mb-1">Kategori</label>
+                  <select
+                    value={newMatCategory}
+                    onChange={(e) => setNewMatCategory(e.target.value as 'AMBALAJ' | 'HAMMADDE')}
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2 text-xs text-zinc-900"
+                  >
+                    <option value="AMBALAJ">Ambalaj & Sarf Malzeme</option>
+                    <option value="HAMMADDE">Hammadde Deposu</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 mb-1">Ölçü Birimi</label>
+                  <select
+                    value={newMatUnit}
+                    onChange={(e) => setNewMatUnit(e.target.value)}
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2 text-xs text-zinc-900"
+                  >
+                    <option value="Adet">Adet</option>
+                    <option value="Kg">Kg</option>
+                    <option value="Litre">Litre</option>
+                    <option value="Koli">Koli</option>
+                    <option value="Teneke">Teneke</option>
+                    <option value="Rulo">Rulo</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 mb-1">Başlangıç Mevcut Stoğu</label>
+                  <input
+                    type="number"
+                    value={newMatStock}
+                    onChange={(e) => setNewMatStock(e.target.value)}
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2 text-xs text-zinc-900 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 mb-1">Kritik Asgari Eşik</label>
+                  <input
+                    type="number"
+                    value={newMatMinStock}
+                    onChange={(e) => setNewMatMinStock(e.target.value)}
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2 text-xs text-zinc-900 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 mb-1">Depo Raf / Lokasyon</label>
+                  <input
+                    type="text"
+                    value={newMatLocation}
+                    onChange={(e) => setNewMatLocation(e.target.value)}
+                    placeholder="Örn: Depo B • Raf 04"
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2 text-xs text-zinc-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 mb-1">Tedarikçi Firma</label>
+                  <input
+                    type="text"
+                    value={newMatSupplier}
+                    onChange={(e) => setNewMatSupplier(e.target.value)}
+                    placeholder="Örn: Star Plastik San."
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2 text-xs text-zinc-900"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-700 mb-1">Başlangıç Parti/Lot No</label>
+                <input
+                  type="text"
+                  value={newMatLot}
+                  onChange={(e) => setNewMatLot(e.target.value)}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2 text-xs text-zinc-900 font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="px-5 py-3.5 bg-zinc-50 border-t border-zinc-100 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setShowNewMaterialModal(false)}
+                className="px-3.5 py-1.5 text-xs text-zinc-600 hover:text-zinc-900 transition"
+              >
+                Vazgeç
+              </button>
+              <button
+                onClick={handleCreateMaterial}
+                className="px-4 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium shadow-xs transition flex items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Malzeme Kartını Kaydet</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: GIDA GÜVENLİĞİ & FEFO / PARTİ İZLENEBİLİRLİK KARTI */}
+      {showFefoModal && (
+        <div className="fixed inset-0 z-50 bg-zinc-950/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-zinc-200 rounded-2xl w-full max-w-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+            <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                <div>
+                  <h3 className="font-semibold text-zinc-900 text-sm">Gıda Güvenliği & FEFO İzlenebilirlik Kartı</h3>
+                  <p className="text-[10px] text-zinc-500">Tarım Bakanlığı & HACCP Standartlarına Uygun Parti Takibi</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowFefoModal(false)}
+                className="text-zinc-400 hover:text-zinc-700 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              {/* Ürün Kimliği Başlığı */}
+              <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-200/70 flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] text-zinc-400 uppercase font-mono tracking-wider">
+                    {fefoMaterial?.category} • {fefoMaterial?.id}
+                  </div>
+                  <div className="font-semibold text-zinc-900 text-sm mt-0.5">{fefoMaterial?.name}</div>
+                  <div className="text-[11px] text-zinc-500 mt-0.5">
+                    Konum: {fefoMaterial?.location} • Tedarikçi: {fefoMaterial?.supplier}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[10px] text-zinc-400">Toplam Stok</div>
+                  <div className="text-base font-bold font-mono text-zinc-900">
+                    {fefoMaterial?.currentStock} {fefoMaterial?.unit}
+                  </div>
+                </div>
+              </div>
+
+              {/* HACCP & Sertifikasyon Rozetleri */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="p-2.5 rounded-lg bg-emerald-50/60 border border-emerald-200/70 text-emerald-900">
+                  <div className="font-semibold text-[11px] flex items-center gap-1">
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>HACCP Onaylı</span>
+                  </div>
+                  <div className="text-[10px] text-emerald-700/80 mt-0.5">TR-34-K-092144 No'lu izin</div>
+                </div>
+                <div className="p-2.5 rounded-lg bg-blue-50/60 border border-blue-200/70 text-blue-900">
+                  <div className="font-semibold text-[11px] flex items-center gap-1">
+                    <Shield className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Soğuk Zincir Uygun</span>
+                  </div>
+                  <div className="text-[10px] text-blue-700/80 mt-0.5">+4°C İdeal İklimlendirme</div>
+                </div>
+                <div className="p-2.5 rounded-lg bg-zinc-50 border border-zinc-200 text-zinc-800">
+                  <div className="font-semibold text-[11px] flex items-center gap-1">
+                    <Info className="w-3.5 h-3.5 text-zinc-500" />
+                    <span>Mikrobiyoloji</span>
+                  </div>
+                  <div className="text-[10px] text-zinc-500 mt-0.5">Parti Şahit Numunesi Alındı</div>
+                </div>
+              </div>
+
+              {/* FEFO Sıralı Partiler (İlk Biten İlk Çıkar) */}
+              <div>
+                <div className="text-xs font-semibold text-zinc-800 mb-2 flex items-center justify-between">
+                  <span>Parti / Lot Dağılımı (FEFO Kuralı: Son Kullanımı En Yakın Parti İlk Tüketilir)</span>
+                  <span className="text-[10px] text-emerald-600 font-medium">Otomatik Sıralı</span>
+                </div>
+
+                <div className="space-y-2">
+                  {/* Parti 1 - Öncelikli Sevk */}
+                  <div className="p-3 rounded-xl border-2 border-amber-300 bg-amber-50/30 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-zinc-900 text-xs">
+                          {fefoMaterial?.lotNo || 'LOT-2026-904'}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[10px] font-semibold border border-amber-200">
+                          🚨 ÖNCELİKLİ ÇIKIŞ (FEFO #1)
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-zinc-600 mt-1">
+                        Kabul: 12.08.2026 • SKT: <strong>15.10.2026 (21 Gün Kaldı)</strong>
+                      </div>
+                      <div className="text-[10px] text-zinc-400">İrsaliye: İRS-4821 • Tedarikçi Analiz Raporu: Geçerli</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-mono text-sm font-bold text-zinc-900">
+                        {Math.max(1, Math.round((fefoMaterial?.currentStock || 100) * 0.4))} {fefoMaterial?.unit}
+                      </div>
+                      <button
+                        onClick={() => {
+                          setShowFefoModal(false);
+                          if (fefoMaterial) {
+                            setSelectedMaterial(fefoMaterial);
+                            setSevkMaterialId(fefoMaterial.id);
+                            setSevkTab('EXIT');
+                            setShowSevkModal(true);
+                          }
+                        }}
+                        className="mt-1 px-2.5 py-1 rounded bg-zinc-900 hover:bg-zinc-800 text-white text-[10px] font-medium transition"
+                      >
+                        Sevk Et →
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Parti 2 - Güvenli Stok */}
+                  <div className="p-3 rounded-xl border border-zinc-200 bg-white flex items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-zinc-900 text-xs">
+                          {fefoMaterial?.lotNo ? `${fefoMaterial.lotNo}-REZ` : 'LOT-2026-942'}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-600 text-[10px] font-medium border border-zinc-200">
+                          Rezerv Stok (FEFO #2)
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-zinc-600 mt-1">
+                        Kabul: 18.09.2026 • SKT: <strong>15.04.2027 (203 Gün Kaldı)</strong>
+                      </div>
+                      <div className="text-[10px] text-zinc-400">İrsaliye: İRS-5104 • Soğuk Hava Deposu</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-mono text-sm font-semibold text-zinc-700">
+                        {Math.max(1, Math.round((fefoMaterial?.currentStock || 100) * 0.6))} {fefoMaterial?.unit}
+                      </div>
+                      <span className="text-[10px] text-zinc-400 block mt-1">Sırada Bekliyor</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-5 py-3.5 bg-zinc-50 border-t border-zinc-100 flex items-center justify-end">
+              <button
+                onClick={() => setShowFefoModal(false)}
+                className="px-4 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium transition"
+              >
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 6: GÜNLÜK FİRE, ZAYİAT VE HURDA ANALİZ RAPORU */}
+      {showWasteReportModal && (
+        <div className="fixed inset-0 z-50 bg-zinc-950/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-zinc-200 rounded-2xl w-full max-w-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+            <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-rose-600" />
+                <div>
+                  <h3 className="font-semibold text-zinc-900 text-sm">Günlük Fire & Zayiat Analiz Raporu</h3>
+                  <p className="text-[10px] text-zinc-500">Peynir İşleme & Ambalajlama Hatları Vardiya Sonu Değerlendirmesi</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowWasteReportModal(false)}
+                className="text-zinc-400 hover:text-zinc-700 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              {/* 4 Ana Metrik */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200/80">
+                  <div className="text-[10px] text-zinc-500 uppercase font-medium">Toplam Sevk</div>
+                  <div className="text-base font-bold font-mono text-zinc-900 mt-0.5">1,070</div>
+                  <div className="text-[10px] text-zinc-400">Adet/Litre</div>
+                </div>
+                <div className="p-3 rounded-xl bg-emerald-50/50 border border-emerald-200/80">
+                  <div className="text-[10px] text-emerald-700 uppercase font-medium">Sağlam Çıkan</div>
+                  <div className="text-base font-bold font-mono text-emerald-800 mt-0.5">1,057</div>
+                  <div className="text-[10px] text-emerald-600">%98.79 Verim</div>
+                </div>
+                <div className="p-3 rounded-xl bg-rose-50/50 border border-rose-200/80">
+                  <div className="text-[10px] text-rose-700 uppercase font-medium">Toplam Fire</div>
+                  <div className="text-base font-bold font-mono text-rose-800 mt-0.5">13 Adet</div>
+                  <div className="text-[10px] text-rose-600">Zayiat/Hurda</div>
+                </div>
+                <div className="p-3 rounded-xl bg-zinc-900 text-white">
+                  <div className="text-[10px] text-zinc-400 uppercase font-medium">Fire Oranı</div>
+                  <div className="text-base font-bold font-mono text-emerald-400 mt-0.5">%1.21</div>
+                  <div className="text-[10px] text-zinc-300">Hedef &lt; %3.0 (Başarılı)</div>
+                </div>
+              </div>
+
+              {/* Hat Bazında Fire Dağılımı */}
+              <div>
+                <div className="font-semibold text-zinc-800 mb-2">Üretim Hatlarına Göre Fire Dağılımı</div>
+                <div className="space-y-2">
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="font-medium text-zinc-700">Kaşar Paketleme Hattı</span>
+                      <span className="font-mono text-zinc-600">8 Adet (%61.5)</span>
+                    </div>
+                    <div className="w-full bg-zinc-100 rounded-full h-2 overflow-hidden">
+                      <div className="bg-rose-500 h-2 rounded-full" style={{ width: '61.5%' }}></div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="font-medium text-zinc-700">Vakumlu Beyaz Peynir Hattı</span>
+                      <span className="font-mono text-zinc-600">3 Adet (%23.1)</span>
+                    </div>
+                    <div className="w-full bg-zinc-100 rounded-full h-2 overflow-hidden">
+                      <div className="bg-amber-500 h-2 rounded-full" style={{ width: '23.1%' }}></div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="font-medium text-zinc-700">Tulum & Yöresel Hattı</span>
+                      <span className="font-mono text-zinc-600">2 Adet (%15.4)</span>
+                    </div>
+                    <div className="w-full bg-zinc-100 rounded-full h-2 overflow-hidden">
+                      <div className="bg-blue-500 h-2 rounded-full" style={{ width: '15.4%' }}></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Hata & Zayiat Nedenleri */}
+              <div>
+                <div className="font-semibold text-zinc-800 mb-2">Zayiat / Hurda Nedenleri Analizi</div>
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="p-2 rounded-lg bg-zinc-50 border border-zinc-200/70 flex justify-between items-center">
+                    <span className="text-zinc-600">Hatta Ezilme / Vakum Kaçağı</span>
+                    <strong className="font-mono text-zinc-900">%54 (7 Adet)</strong>
+                  </div>
+                  <div className="p-2 rounded-lg bg-zinc-50 border border-zinc-200/70 flex justify-between items-center">
+                    <span className="text-zinc-600">Koli / Kutu Yırtılması</span>
+                    <strong className="font-mono text-zinc-900">%23 (3 Adet)</strong>
+                  </div>
+                  <div className="p-2 rounded-lg bg-zinc-50 border border-zinc-200/70 flex justify-between items-center">
+                    <span className="text-zinc-600">Hatalı Barkod / Baskı Kayması</span>
+                    <strong className="font-mono text-zinc-900">%15 (2 Adet)</strong>
+                  </div>
+                  <div className="p-2 rounded-lg bg-zinc-50 border border-zinc-200/70 flex justify-between items-center">
+                    <span className="text-zinc-600">Yere Düşme / Hijyen İhlali</span>
+                    <strong className="font-mono text-zinc-900">%8 (1 Adet)</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Kalite Şefi Değerlendirme Notu */}
+              <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 text-zinc-600 text-[11px] leading-relaxed">
+                <span className="font-semibold text-zinc-800">Kalite Güvence Notu:</span> Kaşar paketleme hattındaki 3 numaralı vakum çenesinde sıcaklık ayarı kontrol edildi ve kalibre edildi. Günlük toplam ambalaj zayiat oranı kabul edilebilir fabrika limitinin (%3.0) oldukça altında kalmıştır.
+              </div>
+            </div>
+
+            <div className="px-5 py-3.5 bg-zinc-50 border-t border-zinc-100 flex items-center justify-between">
+              <button
+                onClick={handleExportCSV}
+                className="px-3 py-1.5 rounded-lg bg-white border border-zinc-200 hover:bg-zinc-100 text-zinc-700 text-xs font-medium transition flex items-center gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5 text-zinc-500" />
+                <span>Raporu CSV Olarak İndir</span>
+              </button>
+
+              <button
+                onClick={() => setShowWasteReportModal(false)}
+                className="px-4 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium transition"
+              >
+                Kapat
+              </button>
             </div>
           </div>
         </div>
