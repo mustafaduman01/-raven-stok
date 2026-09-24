@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import QRCode from 'qrcode';
 import {
   AlertCircle,
   Box,
@@ -16,11 +17,14 @@ import {
   TrendingDown,
   Info,
   Check,
-  ChevronRight,
+  Bell,
+  Download,
+  Copy,
   SlidersHorizontal,
   Package,
-  Activity,
   AlertTriangle,
+  RefreshCw,
+  ExternalLink,
 } from 'lucide-react';
 
 interface Material {
@@ -34,10 +38,10 @@ interface Material {
   location: string;
   lotNo?: string;
   supplier?: string;
+  isCritical: boolean;
 }
 
 const INITIAL_MATERIALS: Material[] = [
-  // Ambalaj Grubu
   {
     id: 'AMB-001',
     name: '500gr Klasik Peynir Kasesi',
@@ -49,6 +53,33 @@ const INITIAL_MATERIALS: Material[] = [
     location: 'Depo A • Göz 02',
     lotNo: 'LOT-KAS-500-24',
     supplier: 'Öz Plastik San.',
+    isCritical: true,
+  },
+  {
+    id: 'HAM-002',
+    name: 'Doğal Sıvı Peynir Mayası (Şirden)',
+    category: 'HAMMADDE',
+    unit: 'Litre',
+    currentStock: 14, // KRİTİK SEVİYE
+    minStock: 40,
+    lastMovement: '10:15 • Üretime Sevk (-6)',
+    location: 'Soğuk Oda • Dolap 03',
+    lotNo: 'MAY-2026-091',
+    supplier: 'BiyoKimya Gıda',
+    isCritical: true,
+  },
+  {
+    id: 'AMB-004',
+    name: 'Baskılı Ürün Gövde Etiketi (Kuşe)',
+    category: 'AMBALAJ',
+    unit: 'Adet',
+    currentStock: 650, // KRİTİK SEVİYE
+    minStock: 1500,
+    lastMovement: '09:30 • Üretime Sevk (-500)',
+    location: 'Etiket Kabini • Raf 01',
+    lotNo: 'LOT-ETK-2026-05',
+    supplier: 'Baskı Teknik Ltd.',
+    isCritical: true,
   },
   {
     id: 'AMB-002',
@@ -61,6 +92,7 @@ const INITIAL_MATERIALS: Material[] = [
     location: 'Depo B • Raf 01',
     lotNo: 'LOT-KUT-1000-19',
     supplier: 'Ege Ambalaj A.Ş.',
+    isCritical: false,
   },
   {
     id: 'AMB-003',
@@ -73,20 +105,8 @@ const INITIAL_MATERIALS: Material[] = [
     location: 'Depo C • Palet 04',
     lotNo: 'LOT-KOL-12-88',
     supplier: 'Modern Oluklu Koli',
+    isCritical: false,
   },
-  {
-    id: 'AMB-004',
-    name: 'Baskılı Ürün Gövde Etiketi (Kuşe)',
-    category: 'AMBALAJ',
-    unit: 'Adet',
-    currentStock: 6500,
-    minStock: 1000,
-    lastMovement: '09:30 • Üretime Sevk (-500)',
-    location: 'Etiket Kabini • Raf 01',
-    lotNo: 'LOT-ETK-2026-05',
-    supplier: 'Baskı Teknik Ltd.',
-  },
-  // Hammadde Grubu
   {
     id: 'HAM-001',
     name: 'Çiğ İnek Sütü (Yağlı %3.8)',
@@ -98,18 +118,7 @@ const INITIAL_MATERIALS: Material[] = [
     location: 'Süt Siloları • Tank 01',
     lotNo: 'SUT-20260924-A',
     supplier: 'Bölge Çiftçiler Birliği',
-  },
-  {
-    id: 'HAM-002',
-    name: 'Doğal Sıvı Peynir Mayası (Şirden)',
-    category: 'HAMMADDE',
-    unit: 'Litre',
-    currentStock: 45,
-    minStock: 20,
-    lastMovement: '10:15 • Üretime Sevk (-5)',
-    location: 'Soğuk Oda • Dolap 03',
-    lotNo: 'MAY-2026-091',
-    supplier: 'BiyoKimya Gıda',
+    isCritical: false,
   },
   {
     id: 'HAM-003',
@@ -122,6 +131,7 @@ const INITIAL_MATERIALS: Material[] = [
     location: 'Kuru Depo • Bölme 01',
     lotNo: 'TUZ-2026-44',
     supplier: 'Kaya Tuzculuk',
+    isCritical: false,
   },
   {
     id: 'HAM-004',
@@ -134,6 +144,7 @@ const INITIAL_MATERIALS: Material[] = [
     location: 'Katkı Deposu • Raf 02',
     lotNo: 'CAL-2026-12',
     supplier: 'Gıda Çözümleri A.Ş.',
+    isCritical: false,
   },
 ];
 
@@ -147,11 +158,12 @@ interface LogEntry {
   detail: string;
 }
 
-export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ onSwitchToSystem }) => {
-  const [activeTab, setActiveTab] = useState<'AMBALAJ' | 'HAMMADDE'>('AMBALAJ');
+export const PrototypeScreen: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'ALL' | 'CRITICAL' | 'AMBALAJ' | 'HAMMADDE'>('ALL');
   const [materials, setMaterials] = useState<Material[]>(INITIAL_MATERIALS);
   const [searchTerm, setSearchTerm] = useState('');
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [showNotificationDrawer, setShowNotificationDrawer] = useState(false);
 
   // Günlük hareket kayıtları
   const [logs, setLogs] = useState<LogEntry[]>([
@@ -171,7 +183,16 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
       type: 'GİRİŞ',
       qty: 500,
       unit: 'Adet',
-      detail: 'İrsaliye: İRS-9821 • Kabul Onaylı',
+      detail: 'İrsaliye: İRS-9821 • Kabul Onaylandı',
+    },
+    {
+      id: 'log-3',
+      time: '10:15',
+      materialName: 'Doğal Sıvı Peynir Mayası',
+      type: 'ÇIKIŞ',
+      qty: 6,
+      unit: 'Litre',
+      detail: 'Mayalama Kazanı 2 • Hasan Usta',
     },
   ]);
 
@@ -179,19 +200,24 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
   const [showMalKabulModal, setShowMalKabulModal] = useState(false);
   const [showSevkModal, setShowSevkModal] = useState(false);
   const [showMobileModal, setShowMobileModal] = useState(false);
+  const [showPrintLabelModal, setShowPrintLabelModal] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
 
+  // QR Kod State'i (Gerçek Base64 QR Image)
+  const [generatedQrDataUrl, setGeneratedQrDataUrl] = useState<string>('');
+  const [qrCopySuccess, setQrCopySuccess] = useState(false);
+
   // Mal Kabul Formu
-  const [mkMaterialId, setMkMaterialId] = useState('');
-  const [mkQty, setMkQty] = useState('');
+  const [mkMaterialId, setMkMaterialId] = useState('AMB-001');
+  const [mkQty, setMkQty] = useState('500');
   const [mkLot, setMkLot] = useState('LOT-2026-904');
   const [mkSkt, setMkSkt] = useState('2027-10-15');
-  const [showQrPreview, setShowQrPreview] = useState(false);
+  const [showPreviewInsideModal, setShowPreviewInsideModal] = useState(false);
 
   // Sevk & İade Formu
   const [sevkTab, setSevkTab] = useState<'EXIT' | 'RETURN'>('EXIT');
-  const [sevkMaterialId, setSevkMaterialId] = useState('');
-  const [exitQty, setExitQty] = useState('');
+  const [sevkMaterialId, setSevkMaterialId] = useState('AMB-001');
+  const [exitQty, setExitQty] = useState('50');
   const [exitLine, setExitLine] = useState('Kaşar Paketleme Hattı');
   const [exitPerson, setExitPerson] = useState('Ahmet Usta (Vardiya 1)');
 
@@ -204,9 +230,36 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
   const [mobileScannedItem, setMobileScannedItem] = useState<Material | null>(null);
   const [mobileFeedback, setMobileFeedback] = useState<string | null>(null);
 
-  // Filtreleme
+  // QR Kod Üretici (Gerçek QRCode Kütüphanesi ile)
+  useEffect(() => {
+    const activeItem = selectedMaterial || materials.find((m) => m.id === mkMaterialId) || materials[0];
+    const qrPayload = JSON.stringify({
+      code: `PRD-${activeItem.id}`,
+      name: activeItem.name,
+      lot: mkLot,
+      skt: mkSkt,
+      system: 'RAVEN-STOK',
+    });
+
+    QRCode.toDataURL(qrPayload, {
+      width: 250,
+      margin: 1,
+      color: {
+        dark: '#09090b',
+        light: '#ffffff',
+      },
+    })
+      .then((url) => setGeneratedQrDataUrl(url))
+      .catch((err) => console.error('QR üretilemedi:', err));
+  }, [selectedMaterial, mkMaterialId, mkLot, mkSkt, materials]);
+
+  // Malzemeleri filtreleme
   const filteredMaterials = materials.filter((m) => {
-    const matchesTab = m.category === activeTab;
+    let matchesTab = true;
+    if (activeTab === 'CRITICAL') matchesTab = m.currentStock < m.minStock;
+    else if (activeTab === 'AMBALAJ') matchesTab = m.category === 'AMBALAJ';
+    else if (activeTab === 'HAMMADDE') matchesTab = m.category === 'HAMMADDE';
+
     const matchesSearch =
       m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       m.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -214,12 +267,11 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
     return matchesTab && matchesSearch;
   });
 
-  // Kritik Stoktaki Ürün Kontrolü
-  const kaseItem = materials.find((m) => m.id === 'AMB-001');
-  const isKaseCritical = kaseItem ? kaseItem.currentStock < kaseItem.minStock : false;
-  const criticalCount = materials.filter((m) => m.currentStock < m.minStock).length;
+  // Kritik Stok Sayısı
+  const criticalItems = materials.filter((m) => m.currentStock < m.minStock);
+  const criticalCount = criticalItems.length;
 
-  // 1. Mal Kabul İşlemi
+  // 1. Mal Kabul İşlemi (Stoğu Arttırır)
   const handleConfirmMalKabul = () => {
     const targetId = mkMaterialId || selectedMaterial?.id || 'AMB-001';
     const qtyNum = Number(mkQty);
@@ -238,6 +290,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
             currentStock: newStock,
             lastMovement: `Bugün ${nowStr} • Mal Kabul (+${qtyNum})`,
             lotNo: mkLot || item.lotNo,
+            isCritical: newStock < item.minStock,
           };
         }
         return item;
@@ -259,16 +312,16 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
     ]);
 
     setShowMalKabulModal(false);
-    setShowQrPreview(false);
-    setMkQty('');
+    setShowPreviewInsideModal(false);
+    alert(`✅ ${targetMat?.name} için ${qtyNum} ${targetMat?.unit} başarıyla depoya eklendi ve QR etiket onaylandı.`);
   };
 
-  // 2. Üretime Sevk Çıkışı
+  // 2. Üretime Sevk Çıkışı (Stoğu Azaltır)
   const handleConfirmExit = () => {
     const targetId = sevkMaterialId || selectedMaterial?.id || 'AMB-001';
     const qtyNum = Number(exitQty);
     if (!qtyNum || qtyNum <= 0) {
-      alert('Lütfen geçerli bir miktar giriniz.');
+      alert('Lütfen geçerli bir çıkış miktarı giriniz.');
       return;
     }
 
@@ -282,10 +335,12 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
     setMaterials((prev) =>
       prev.map((item) => {
         if (item.id === targetId) {
+          const newStock = Math.max(0, item.currentStock - qtyNum);
           return {
             ...item,
-            currentStock: Math.max(0, item.currentStock - qtyNum),
+            currentStock: newStock,
             lastMovement: `Bugün ${nowStr} • Üretime Sevk (-${qtyNum})`,
+            isCritical: newStock < item.minStock,
           };
         }
         return item;
@@ -306,7 +361,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
     ]);
 
     setShowSevkModal(false);
-    setExitQty('');
+    alert(`✅ ${currentItem?.name} stoktan ${qtyNum} ${currentItem?.unit} üretime sevk edildi.`);
   };
 
   // 3. Üretimden İade Al & Fire Hesabı
@@ -322,10 +377,12 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
       setMaterials((prev) =>
         prev.map((item) => {
           if (item.id === targetId) {
+            const newStock = item.currentStock + goodNum;
             return {
               ...item,
-              currentStock: item.currentStock + goodNum,
+              currentStock: newStock,
               lastMovement: `Bugün ${nowStr} • Sağlam İade (+${goodNum})`,
+              isCritical: newStock < item.minStock,
             };
           }
           return item;
@@ -362,6 +419,23 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
     }
 
     setShowSevkModal(false);
+    alert(`✅ İade tamamlandı. ${goodNum} ${currentItem?.unit} depoya geri alındı. ${calculatedWaste} ${currentItem?.unit} fire kaydı sisteme işlendi.`);
+  };
+
+  // 4. Etiket Baskı Alma (Gerçek window.print simülasyonu)
+  const handlePrintLabel = () => {
+    window.print();
+  };
+
+  // 5. QR Görselini İndirme
+  const handleDownloadQr = () => {
+    if (!generatedQrDataUrl) return;
+    const a = document.createElement('a');
+    a.href = generatedQrDataUrl;
+    a.download = `QR_${selectedMaterial?.id || 'RAVEN'}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   // Mobil Tarama Aksiyonu
@@ -372,11 +446,13 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
     if (action === 'EXIT') {
       const dropQty = 20;
       setMaterials((prev) =>
-        prev.map((m) =>
-          m.id === mobileScannedItem.id
-            ? { ...m, currentStock: Math.max(0, m.currentStock - dropQty) }
-            : m,
-        ),
+        prev.map((m) => {
+          if (m.id === mobileScannedItem.id) {
+            const newStock = Math.max(0, m.currentStock - dropQty);
+            return { ...m, currentStock: newStock, isCritical: newStock < m.minStock };
+          }
+          return m;
+        }),
       );
       setMobileFeedback(`-20 ${mobileScannedItem.unit} üretime sevk edildi`);
       setLogs((prev) => [
@@ -394,9 +470,13 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
     } else {
       const returnQty = 15;
       setMaterials((prev) =>
-        prev.map((m) =>
-          m.id === mobileScannedItem.id ? { ...m, currentStock: m.currentStock + returnQty } : m,
-        ),
+        prev.map((m) => {
+          if (m.id === mobileScannedItem.id) {
+            const newStock = m.currentStock + returnQty;
+            return { ...m, currentStock: newStock, isCritical: newStock < m.minStock };
+          }
+          return m;
+        }),
       );
       setMobileFeedback(`+15 ${mobileScannedItem.unit} depoya sağlam iade edildi`);
       setLogs((prev) => [
@@ -420,7 +500,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
 
   return (
     <div className="min-h-screen bg-[#fafafa] text-zinc-900 font-sans antialiased selection:bg-zinc-200">
-      {/* 1. ÜST BAR (MINIMALIST & SOFISTIKE) */}
+      {/* 1. ÜST BAR & YETKİ GÖSTERGESİ */}
       <header className="bg-white border-b border-zinc-200/80 sticky top-0 z-30">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
           {/* Logo & Başlık */}
@@ -432,7 +512,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-sm tracking-tight text-zinc-900">Raven Stok</span>
                 <span className="text-[10px] font-medium text-zinc-400 bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200/60">
-                  Prototip
+                  Prototip v1.0
                 </span>
               </div>
               <p className="text-[11px] text-zinc-500 font-normal leading-none mt-0.5">
@@ -441,8 +521,79 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
             </div>
           </div>
 
-          {/* Yetki Göstergesi & Butonlar */}
+          {/* Sağ Alan: Bildirim Çanı & Kullanıcı & Mobil */}
           <div className="flex items-center gap-2.5 sm:gap-3">
+            {/* Bildirim Çanı Butonu */}
+            <div className="relative">
+              <button
+                onClick={() => setShowNotificationDrawer(!showNotificationDrawer)}
+                className="relative p-2 rounded-lg text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 transition"
+                title="Stok Uyarıları ve Bildirimler"
+              >
+                <Bell className="w-4 h-4" />
+                {criticalCount > 0 && (
+                  <span className="absolute top-1 right-1 bg-rose-600 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-pulse">
+                    {criticalCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Bildirim Açılır Penceresi (Dropdown) */}
+              {showNotificationDrawer && (
+                <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-zinc-200 rounded-2xl shadow-xl p-3 z-50 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="flex items-center justify-between pb-2 border-b border-zinc-100">
+                    <span className="font-semibold text-xs text-zinc-900 flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
+                      Aktif Depo Uyarıları ({criticalCount})
+                    </span>
+                    <button
+                      onClick={() => setShowNotificationDrawer(false)}
+                      className="text-zinc-400 hover:text-zinc-700 text-xs"
+                    >
+                      Kapat
+                    </button>
+                  </div>
+
+                  <div className="divide-y divide-zinc-100 mt-1 max-h-72 overflow-y-auto">
+                    {criticalItems.map((item) => (
+                      <div key={item.id} className="py-2.5 text-xs flex items-start justify-between gap-2">
+                        <div>
+                          <div className="font-semibold text-zinc-900">{item.name}</div>
+                          <div className="text-[11px] text-rose-600 font-medium">
+                            Kalan: <strong>{item.currentStock} {item.unit}</strong> (Asgari Eşik: {item.minStock} {item.unit})
+                          </div>
+                          <div className="text-[10px] text-zinc-400 mt-0.5">{item.location}</div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setSelectedMaterial(item);
+                            setMkMaterialId(item.id);
+                            setShowNotificationDrawer(false);
+                            setShowMalKabulModal(true);
+                          }}
+                          className="px-2 py-1 rounded bg-zinc-900 hover:bg-zinc-800 text-white text-[10px] font-medium shrink-0"
+                        >
+                          Takviye Et
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="pt-2 border-t border-zinc-100 text-center">
+                    <button
+                      onClick={() => {
+                        setActiveTab('CRITICAL');
+                        setShowNotificationDrawer(false);
+                      }}
+                      className="text-[11px] text-zinc-600 hover:text-zinc-900 font-medium"
+                    >
+                      Kritik Ürünleri Tabloda Filtrele →
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Kullanıcı Rozeti */}
             <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-full bg-zinc-50 border border-zinc-200/80 text-xs text-zinc-600">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 ring-2 ring-emerald-500/20"></span>
@@ -462,38 +613,23 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
               <Smartphone className="w-3.5 h-3.5 text-zinc-300" />
               <span>Mobil Tarayıcı</span>
             </button>
-
-            {onSwitchToSystem && (
-              <button
-                onClick={onSwitchToSystem}
-                className="text-xs text-zinc-500 hover:text-zinc-900 px-2 py-1 transition"
-              >
-                Tam Sistem →
-              </button>
-            )}
           </div>
         </div>
 
-        {/* 2. KRİTİK STOK UYARI BANNER'I (ZARİF & DİKKAT ÇEKİCİ) */}
-        {!bannerDismissed && isKaseCritical && (
-          <div className="bg-amber-50 border-t border-b border-amber-200/70 px-4 py-2 text-xs">
+        {/* 2. KRİTİK STOK UYARI BANNER'I */}
+        {!bannerDismissed && criticalCount > 0 && (
+          <div className="bg-amber-50 border-t border-b border-amber-200/80 px-4 py-2 text-xs">
             <div className="max-w-6xl mx-auto flex items-center justify-between gap-3 text-amber-900">
               <div className="flex items-center gap-2.5">
                 <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
                 <span className="text-[12px]">
-                  <strong>Kritik Stok Uyarısı:</strong> 500gr Kase stoğu kritik eşiğin altına indi (Kalan: <strong>{kaseItem?.currentStock} Adet</strong> / Asgari: {kaseItem?.minStock} Adet).
+                  <strong>Kritik Stok Uyarısı:</strong> {criticalCount} ürün asgari seviyenin altına indi! (500gr Kase, Sıvı Maya, Kuşe Etiket).
                 </span>
                 <button
-                  onClick={() => {
-                    const target = materials.find((m) => m.id === 'AMB-001') || materials[0];
-                    setSelectedMaterial(target);
-                    setMkMaterialId(target.id);
-                    setShowQrPreview(false);
-                    setShowMalKabulModal(true);
-                  }}
-                  className="hidden md:inline-flex items-center gap-1 font-semibold underline underline-offset-2 hover:text-amber-950 ml-1"
+                  onClick={() => setActiveTab('CRITICAL')}
+                  className="font-semibold underline underline-offset-2 hover:text-amber-950 ml-1 text-[11px]"
                 >
-                  Hemen Mal Kabul Yap →
+                  Kritik Ürünleri Listele ({criticalCount}) →
                 </button>
               </div>
 
@@ -511,31 +647,36 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
 
       {/* ANA İÇERİK ALANI */}
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* KPI ÖZET KARTLARI (MINIMALIST KARELER) */}
+        {/* KPI ÖZET KARTLARI */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="bg-white p-3.5 rounded-xl border border-zinc-200/80 shadow-xs">
-            <div className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Toplam Kalem</div>
-            <div className="text-xl font-semibold text-zinc-900 mt-1">8 Malzeme</div>
+            <div className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Toplam Malzeme</div>
+            <div className="text-xl font-semibold text-zinc-900 mt-1">{materials.length} Kalem</div>
             <div className="text-[11px] text-zinc-400 mt-0.5">4 Hammadde • 4 Ambalaj</div>
           </div>
 
-          <div className="bg-white p-3.5 rounded-xl border border-zinc-200/80 shadow-xs">
-            <div className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Kritik Stok</div>
-            <div className="text-xl font-semibold text-amber-600 mt-1 flex items-center gap-1.5">
-              <span>{criticalCount} Kalem</span>
-              {criticalCount > 0 && <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>}
+          <div
+            onClick={() => setActiveTab('CRITICAL')}
+            className="bg-white p-3.5 rounded-xl border border-rose-200 shadow-xs cursor-pointer hover:bg-rose-50/40 transition"
+          >
+            <div className="text-[11px] font-medium text-rose-600 uppercase tracking-wider flex items-center justify-between">
+              <span>Kritik Stok Uyarısı</span>
+              <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
             </div>
-            <div className="text-[11px] text-amber-700/80 mt-0.5">500gr Kase takviye bekliyor</div>
+            <div className="text-xl font-bold text-rose-600 mt-1">
+              {criticalCount} Ürün Azaldı
+            </div>
+            <div className="text-[11px] text-rose-700/80 mt-0.5">Filtrelemek için tıkla →</div>
           </div>
 
           <div className="bg-white p-3.5 rounded-xl border border-zinc-200/80 shadow-xs">
             <div className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Bugünkü Sevk</div>
             <div className="text-xl font-semibold text-zinc-900 mt-1">1,070 Adet / Lt</div>
-            <div className="text-[11px] text-emerald-600 mt-0.5">Üretim planına uygun</div>
+            <div className="text-[11px] text-emerald-600 mt-0.5">Üretim hatları aktif</div>
           </div>
 
           <div className="bg-white p-3.5 rounded-xl border border-zinc-200/80 shadow-xs">
-            <div className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Günlük Fire Oranı</div>
+            <div className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Hesaplanan Fire</div>
             <div className="text-xl font-semibold text-zinc-900 mt-1">%1.2</div>
             <div className="text-[11px] text-zinc-400 mt-0.5">Hedef eşik: &lt; %3.0</div>
           </div>
@@ -544,32 +685,52 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
         {/* SEKME SEÇİMİ VE ANA AKSİYONLAR */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
           {/* Segmented Control (Sekmeler) */}
-          <div className="inline-flex bg-zinc-100 p-1 rounded-xl border border-zinc-200/60">
+          <div className="inline-flex bg-zinc-100 p-1 rounded-xl border border-zinc-200/60 overflow-x-auto">
+            <button
+              onClick={() => setActiveTab('ALL')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition whitespace-nowrap ${
+                activeTab === 'ALL'
+                  ? 'bg-white text-zinc-900 shadow-xs font-semibold'
+                  : 'text-zinc-600 hover:text-zinc-900'
+              }`}
+            >
+              <span>Tümü ({materials.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('CRITICAL')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition whitespace-nowrap ${
+                activeTab === 'CRITICAL'
+                  ? 'bg-rose-50 text-rose-700 shadow-xs font-semibold border border-rose-200'
+                  : 'text-rose-600 hover:text-rose-700'
+              }`}
+            >
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span>Kritik Stoklar ({criticalCount})</span>
+            </button>
+
             <button
               onClick={() => setActiveTab('AMBALAJ')}
-              className={`flex items-center gap-2 px-4 py-1.5 text-xs font-medium rounded-lg transition ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition whitespace-nowrap ${
                 activeTab === 'AMBALAJ'
                   ? 'bg-white text-zinc-900 shadow-xs font-semibold'
                   : 'text-zinc-600 hover:text-zinc-900'
               }`}
             >
               <Layers className="w-3.5 h-3.5 text-zinc-500" />
-              <span>Ambalaj & Sarf Malzeme</span>
-              {isKaseCritical && (
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-              )}
+              <span>Ambalaj & Sarf (4)</span>
             </button>
 
             <button
               onClick={() => setActiveTab('HAMMADDE')}
-              className={`flex items-center gap-2 px-4 py-1.5 text-xs font-medium rounded-lg transition ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition whitespace-nowrap ${
                 activeTab === 'HAMMADDE'
                   ? 'bg-white text-zinc-900 shadow-xs font-semibold'
                   : 'text-zinc-600 hover:text-zinc-900'
               }`}
             >
               <Box className="w-3.5 h-3.5 text-zinc-500" />
-              <span>Hammadde Deposu</span>
+              <span>Hammadde Deposu (4)</span>
             </button>
           </div>
 
@@ -580,7 +741,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                 const target = filteredMaterials[0] || materials[0];
                 setSelectedMaterial(target);
                 setMkMaterialId(target.id);
-                setShowQrPreview(false);
+                setShowPreviewInsideModal(false);
                 setShowMalKabulModal(true);
               }}
               className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium shadow-xs transition active:scale-98"
@@ -623,7 +784,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Normal
             </span>
             <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-amber-500"></span> Kritik Seviye
+              <span className="w-2 h-2 rounded-full bg-rose-500"></span> Kritik Eşik Altı
             </span>
           </div>
         </div>
@@ -634,12 +795,12 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
             <table className="w-full text-left text-xs">
               <thead className="bg-zinc-50/75 text-zinc-500 uppercase text-[10px] font-semibold tracking-wider border-b border-zinc-200/80">
                 <tr>
-                  <th className="py-3 px-4">Malzeme Adı</th>
+                  <th className="py-3 px-4">Malzeme Adı & Kod</th>
                   <th className="py-3 px-3">Kategori & Lokasyon</th>
                   <th className="py-3 px-3">Mevcut Stok</th>
                   <th className="py-3 px-3">Kritik Eşik</th>
                   <th className="py-3 px-3">Son Hareket</th>
-                  <th className="py-3 px-4 text-right">İşlemler</th>
+                  <th className="py-3 px-4 text-right">QR & İşlemler</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
@@ -650,7 +811,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                       key={item.id}
                       className={`transition-colors ${
                         isCritical
-                          ? 'bg-amber-50/40 hover:bg-amber-50/70'
+                          ? 'bg-rose-50/30 hover:bg-rose-50/60'
                           : 'hover:bg-zinc-50/60'
                       }`}
                     >
@@ -659,7 +820,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                         <div className="flex items-center gap-3">
                           <div
                             className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-mono font-medium ${
-                              isCritical ? 'bg-amber-100 text-amber-800' : 'bg-zinc-100 text-zinc-600'
+                              isCritical ? 'bg-rose-100 text-rose-800' : 'bg-zinc-100 text-zinc-600'
                             }`}
                           >
                             {item.id.split('-')[0]}
@@ -668,8 +829,8 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                             <div className="font-semibold text-zinc-900 flex items-center gap-2">
                               <span>{item.name}</span>
                               {isCritical && (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-100 text-rose-800 border border-rose-200">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
                                   Kritik
                                 </span>
                               )}
@@ -691,14 +852,14 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                       <td className="py-3.5 px-3">
                         <div
                           className={`font-mono text-sm font-semibold tabular-nums ${
-                            isCritical ? 'text-amber-700 font-bold' : 'text-zinc-900'
+                            isCritical ? 'text-rose-600 font-bold' : 'text-zinc-900'
                           }`}
                         >
                           {item.currentStock.toLocaleString('tr-TR')} {item.unit}
                         </div>
                         {isCritical && (
-                          <div className="text-[10px] text-amber-600">
-                            Eşiğin {item.minStock - item.currentStock} altı
+                          <div className="text-[10px] text-rose-500 font-medium">
+                            Asgari eşiğin {item.minStock - item.currentStock} {item.unit} altında!
                           </div>
                         )}
                       </td>
@@ -713,22 +874,37 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                         {item.lastMovement}
                       </td>
 
-                      {/* Hızlı İşlemler */}
+                      {/* Hızlı İşlemler & QR Bas */}
                       <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {/* QR Kod Göster & Yazdır Butonu */}
+                          <button
+                            onClick={() => {
+                              setSelectedMaterial(item);
+                              setShowPrintLabelModal(true);
+                            }}
+                            className="flex items-center gap-1 px-2 py-1 rounded bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-[11px] font-medium transition"
+                            title="Gerçek QR Kod ve Termal Etiket Baskısı Al"
+                          >
+                            <QrCode className="w-3.5 h-3.5 text-zinc-700" />
+                            <span>QR Bas</span>
+                          </button>
+
+                          {/* Hızlı Mal Kabul */}
                           <button
                             onClick={() => {
                               setSelectedMaterial(item);
                               setMkMaterialId(item.id);
-                              setShowQrPreview(false);
+                              setShowPreviewInsideModal(false);
                               setShowMalKabulModal(true);
                             }}
-                            title="Mal Kabul Yap & QR Bas"
+                            title="Mal Kabul Yap"
                             className="p-1.5 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition"
                           >
                             <Plus className="w-4 h-4" />
                           </button>
 
+                          {/* Üretime Sevk / İade */}
                           <button
                             onClick={() => {
                               setSelectedMaterial(item);
@@ -741,19 +917,6 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                           >
                             <ArrowUpRight className="w-4 h-4" />
                           </button>
-
-                          <button
-                            onClick={() => {
-                              setSelectedMaterial(item);
-                              setMkMaterialId(item.id);
-                              setShowQrPreview(true);
-                              setShowMalKabulModal(true);
-                            }}
-                            title="Termal Etiket Görüntüle"
-                            className="p-1.5 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition"
-                          >
-                            <Printer className="w-4 h-4" />
-                          </button>
                         </div>
                       </td>
                     </tr>
@@ -764,7 +927,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
           </div>
         </div>
 
-        {/* CANLI HAREKET GÜNLÜĞÜ (MINIMAL FEED) */}
+        {/* CANLI HAREKET GÜNLÜĞÜ */}
         <div className="bg-white rounded-xl border border-zinc-200/80 shadow-xs p-4">
           <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
             <div className="flex items-center gap-2">
@@ -811,8 +974,101 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
       </main>
 
       {/* ========================================================================= */}
-      {/* MODALLAR (MINIMALIST & NET) */}
+      {/* MODALLAR */}
       {/* ========================================================================= */}
+
+      {/* MODAL: ÖZEL GERÇEK QR KOD & TERMAL ETİKET BASKI MODALI */}
+      {showPrintLabelModal && selectedMaterial && (
+        <div className="fixed inset-0 z-50 bg-zinc-950/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-zinc-200 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+            <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Printer className="w-4 h-4 text-zinc-700" />
+                <h3 className="font-semibold text-zinc-900 text-sm">QR Kod & 50x30mm Termal Etiket</h3>
+              </div>
+              <button
+                onClick={() => setShowPrintLabelModal(false)}
+                className="text-zinc-400 hover:text-zinc-700 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 flex flex-col items-center space-y-4">
+              {/* TERMAL ETİKET (50mm x 30mm Gerçek Boyut Tasarımı) */}
+              <div
+                id="printable-label"
+                className="w-[280px] h-[168px] bg-white text-zinc-950 p-3 rounded-lg border-2 border-zinc-900 shadow-md flex flex-col justify-between font-mono select-none"
+              >
+                <div className="border-b-2 border-zinc-900 pb-1 flex justify-between items-center text-[10px]">
+                  <span className="font-extrabold tracking-tight">RAVEN STOK SİSTEMİ</span>
+                  <span className="bg-zinc-900 text-white px-1.5 py-0.2 text-[8px] font-bold">FEFO ONAYLI</span>
+                </div>
+
+                <div className="flex gap-2.5 items-center py-1">
+                  {/* GERÇEK VEKTÖREL QR KOD RESMİ */}
+                  {generatedQrDataUrl ? (
+                    <img
+                      src={generatedQrDataUrl}
+                      alt="Gerçek QR Kod"
+                      className="w-16 h-16 border border-zinc-200 rounded shrink-0"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 bg-zinc-100 animate-pulse rounded"></div>
+                  )}
+
+                  <div className="flex-1 overflow-hidden space-y-0.5 text-[9px] leading-tight">
+                    <div className="font-bold text-[11px] truncate text-zinc-950 font-sans">
+                      {selectedMaterial.name}
+                    </div>
+                    <div>
+                      KOD: <strong className="font-bold">PRD-{selectedMaterial.id}</strong>
+                    </div>
+                    <div>
+                      PARTİ: <strong>{selectedMaterial.lotNo || 'LOT-2026-01'}</strong>
+                    </div>
+                    <div>
+                      MEVCUT: <strong>{selectedMaterial.currentStock} {selectedMaterial.unit}</strong>
+                    </div>
+                    <div>
+                      KONUM: <strong>{selectedMaterial.location}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-dashed border-zinc-400 pt-1 flex justify-between items-center text-[8px] text-zinc-600 font-sans">
+                  <span>*PRD-{selectedMaterial.id}*</span>
+                  <span>Tarih: 24.09.2026</span>
+                </div>
+              </div>
+
+              {/* Bilgilendirme */}
+              <p className="text-[11px] text-zinc-500 text-center max-w-xs">
+                Bu QR kod telefon kamerası veya endüstriyel el terminaliyle taranabilir.
+              </p>
+
+              {/* Aksiyon Butonları */}
+              <div className="w-full grid grid-cols-2 gap-2 pt-2">
+                <button
+                  onClick={handlePrintLabel}
+                  className="py-2.5 px-3 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold shadow-xs flex items-center justify-center gap-1.5 transition active:scale-98"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>🖨️ Yazdır (Baskı Al)</span>
+                </button>
+
+                <button
+                  onClick={handleDownloadQr}
+                  className="py-2.5 px-3 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-semibold border border-zinc-200 flex items-center justify-center gap-1.5 transition active:scale-98"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>💾 QR İndir (PNG)</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL 1: MAL KABUL & QR BAS */}
       {showMalKabulModal && (
@@ -821,7 +1077,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
             <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Box className="w-4 h-4 text-zinc-700" />
-                <h3 className="font-semibold text-zinc-900 text-sm">Mal Kabul & Termal QR Baskı</h3>
+                <h3 className="font-semibold text-zinc-900 text-sm">Mal Kabul & Stok Girişi</h3>
               </div>
               <button
                 onClick={() => setShowMalKabulModal(false)}
@@ -833,15 +1089,19 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
 
             <div className="p-5 space-y-3.5">
               <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Kabul Malzemesi</label>
+                <label className="block text-xs font-medium text-zinc-600 mb-1">Giriş Yapılacak Malzeme</label>
                 <select
                   value={mkMaterialId}
-                  onChange={(e) => setMkMaterialId(e.target.value)}
+                  onChange={(e) => {
+                    setMkMaterialId(e.target.value);
+                    const found = materials.find((m) => m.id === e.target.value);
+                    if (found) setSelectedMaterial(found);
+                  }}
                   className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2 text-xs text-zinc-900 focus:outline-none focus:border-zinc-400"
                 >
                   {materials.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.name} ({m.currentStock} {m.unit} mevcut)
+                      {m.name} (Mevcut: {m.currentStock} {m.unit})
                     </option>
                   ))}
                 </select>
@@ -855,7 +1115,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                     placeholder="Örn: 500"
                     value={mkQty}
                     onChange={(e) => setMkQty(e.target.value)}
-                    className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2 text-xs text-zinc-900 focus:outline-none focus:border-zinc-400"
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2 text-xs text-zinc-900 focus:outline-none focus:border-zinc-400 font-mono"
                   />
                 </div>
                 <div>
@@ -882,38 +1142,29 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
               <div className="pt-1">
                 <button
                   type="button"
-                  onClick={() => setShowQrPreview(!showQrPreview)}
+                  onClick={() => setShowPreviewInsideModal(!showPreviewInsideModal)}
                   className="w-full py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200/80 text-zinc-700 text-xs font-medium transition flex items-center justify-center gap-1.5"
                 >
                   <QrCode className="w-3.5 h-3.5" />
-                  <span>{showQrPreview ? 'Önizlemeyi Kapat' : '50x30mm Termal Etiket Tasarımını Önizle'}</span>
+                  <span>{showPreviewInsideModal ? 'Etiket Önizlemesini Kapat' : '50x30mm QR Termal Etiketi Önizle'}</span>
                 </button>
               </div>
 
-              {/* 50x30mm TERMAL ETİKET ÖNİZLEMESİ (GERÇEKÇİ & ZARİF) */}
-              {showQrPreview && (
+              {/* Modal İçinde Gerçek QR Etiket Önizleme */}
+              {showPreviewInsideModal && (
                 <div className="p-3 bg-zinc-100/70 rounded-xl border border-zinc-200/80 flex flex-col items-center">
-                  <div className="text-[10px] font-medium text-zinc-500 mb-2">
-                    Zebra ZPL Standartlarında 50mm x 30mm Termal Çıktı
-                  </div>
-
                   <div className="w-[270px] h-[162px] bg-white text-zinc-900 p-3 rounded shadow-xs border border-zinc-300 flex flex-col justify-between font-mono text-[9px] select-none">
                     <div className="border-b border-zinc-900 pb-1 flex justify-between items-center">
                       <span className="font-bold text-[10px] tracking-tight">RAVEN STOK</span>
-                      <span className="text-[8px] bg-zinc-900 text-white px-1 font-semibold">KABUL</span>
+                      <span className="text-[8px] bg-zinc-900 text-white px-1 font-semibold">KABUL ONAY</span>
                     </div>
 
                     <div className="flex gap-2 items-center py-1">
-                      {/* Vektör QR Simülasyonu */}
-                      <div className="w-14 h-14 bg-zinc-900 p-1 rounded flex items-center justify-center shrink-0">
-                        <div className="w-full h-full bg-white p-0.5 flex flex-wrap gap-0.5 items-center justify-center">
-                          <div className="w-2.5 h-2.5 bg-zinc-900"></div>
-                          <div className="w-2.5 h-2.5 bg-zinc-900"></div>
-                          <div className="w-1 h-1 bg-zinc-900"></div>
-                          <div className="w-2.5 h-2.5 bg-zinc-900"></div>
-                          <div className="w-2 h-2 bg-zinc-900"></div>
-                        </div>
-                      </div>
+                      {generatedQrDataUrl ? (
+                        <img src={generatedQrDataUrl} alt="QR Kod" className="w-14 h-14 shrink-0" />
+                      ) : (
+                        <div className="w-14 h-14 bg-zinc-200"></div>
+                      )}
 
                       <div className="flex-1 overflow-hidden space-y-0.5 leading-tight">
                         <div className="font-bold text-[10px] truncate text-zinc-900">
@@ -927,6 +1178,9 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                         </div>
                         <div className="text-zinc-600">
                           SKT: <strong className="text-zinc-900">{mkSkt}</strong>
+                        </div>
+                        <div className="text-zinc-600">
+                          MİKTAR: <strong className="text-zinc-900">{mkQty} Adet/Kg</strong>
                         </div>
                       </div>
                     </div>
@@ -950,7 +1204,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                 onClick={handleConfirmMalKabul}
                 className="px-4 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium shadow-xs transition"
               >
-                Stoğa Ekle & Etiketi Bas
+                Stoğa Ekle & QR Onayla
               </button>
             </div>
           </div>
@@ -984,7 +1238,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                     : 'text-zinc-500 hover:text-zinc-900'
                 }`}
               >
-                Üretime Çıkış
+                Üretime Çıkış (-Stok)
               </button>
               <button
                 onClick={() => setSevkTab('RETURN')}
@@ -1024,7 +1278,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                       placeholder="Örn: 50"
                       value={exitQty}
                       onChange={(e) => setExitQty(e.target.value)}
-                      className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2 text-xs text-zinc-900 focus:outline-none focus:border-zinc-400"
+                      className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2 text-xs text-zinc-900 focus:outline-none focus:border-zinc-400 font-mono"
                     />
                   </div>
 
@@ -1064,7 +1318,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                       onClick={handleConfirmExit}
                       className="px-4 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium shadow-xs transition"
                     >
-                      Çıkışı Onayla
+                      Çıkışı Onayla (-Stok Düş)
                     </button>
                   </div>
                 </>
@@ -1073,7 +1327,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                 <>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-zinc-600 mb-1">Hatta Verilen</label>
+                      <label className="block text-xs font-medium text-zinc-600 mb-1">Hatta Verilen Miktar</label>
                       <input
                         type="number"
                         value={returnIssuedQty}
@@ -1082,7 +1336,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-zinc-600 mb-1">Sağlam Dönen</label>
+                      <label className="block text-xs font-medium text-zinc-600 mb-1">Sağlam Dönen Miktar</label>
                       <input
                         type="number"
                         value={returnGoodQty}
@@ -1093,13 +1347,13 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                   </div>
 
                   {/* OTOMATİK HESAPLANAN FİRE KARTÇIĞI */}
-                  <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200/80 flex items-center justify-between text-xs">
+                  <div className="p-3 rounded-xl bg-rose-50/50 border border-rose-200/80 flex items-center justify-between text-xs">
                     <div>
-                      <div className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider">
-                        Otomatik Hesaplanan Fire
+                      <div className="text-[11px] font-semibold text-rose-700 uppercase tracking-wider">
+                        Otomatik Hesaplanan Fire / Zayiat
                       </div>
-                      <div className="text-[11px] text-zinc-400 mt-0.5">
-                        Verilen ({returnIssuedQty}) - Sağlam ({returnGoodQty})
+                      <div className="text-[11px] text-zinc-500 mt-0.5">
+                        Verilen ({returnIssuedQty}) - Sağlam ({returnGoodQty}) = Fire
                       </div>
                     </div>
                     <div className="font-mono text-base font-bold text-rose-600">
@@ -1142,9 +1396,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* 5. MOBİL TARAYICI MOCKUP (MINIMALIST & GERÇEKÇİ ÇERÇEVE) */}
-      {/* ========================================================================= */}
+      {/* MODAL 3: MOBİL TARAYICI MOCKUP */}
       {showMobileModal && (
         <div className="fixed inset-0 z-50 bg-zinc-950/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="relative w-full max-w-[320px] bg-zinc-950 border border-zinc-800 rounded-[36px] shadow-2xl p-4 flex flex-col items-center text-white overflow-hidden animate-in fade-in zoom-in-95 duration-100">
@@ -1177,10 +1429,14 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
               <div className="absolute bottom-3 left-3 w-3 h-3 border-b-2 border-l-2 border-emerald-400"></div>
               <div className="absolute bottom-3 right-3 w-3 h-3 border-b-2 border-r-2 border-emerald-400"></div>
 
-              <div className="w-16 h-16 bg-white p-1 rounded flex items-center justify-center">
-                <QrCode className="w-14 h-14 text-zinc-900" />
-              </div>
-              <span className="text-[9px] text-zinc-400 font-mono mt-1">PRD-{mobileScannedItem?.id}</span>
+              {generatedQrDataUrl ? (
+                <img src={generatedQrDataUrl} alt="QR Tarama" className="w-16 h-16 p-1 bg-white rounded" />
+              ) : (
+                <QrCode className="w-14 h-14 text-white" />
+              )}
+              <span className="text-[9px] text-zinc-400 font-mono mt-1">
+                PRD-{mobileScannedItem?.id || 'AMB-001'}
+              </span>
             </div>
 
             {/* Hızlı Seçim Butonları */}
@@ -1204,7 +1460,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                       : 'bg-zinc-900/80 text-zinc-400 border-zinc-800'
                   }`}
                 >
-                  Peynir Mayası
+                  Sıvı Maya (Kritik)
                 </button>
               </div>
             </div>
@@ -1244,7 +1500,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
             )}
 
             <div className="text-[9px] text-zinc-500 text-center">
-              Aksiyonlar arka plandaki ana tabloyu anında günceller.
+              Aksiyonlar ana tablonun stoğunu anlık değiştirir.
             </div>
           </div>
         </div>

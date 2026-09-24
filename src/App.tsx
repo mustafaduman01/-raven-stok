@@ -133,15 +133,5 @@ const MainLayout: React.FC<{ onSwitchToPrototype?: () => void }> = ({ onSwitchTo
 };
 
 export default function App() {
-  const [viewMode, setViewMode] = useState<'prototype' | 'system'>('prototype');
-
-  if (viewMode === 'prototype') {
-    return <PrototypeScreen onSwitchToSystem={() => setViewMode('system')} />;
-  }
-
-  return (
-    <AuthProvider>
-      <MainLayout onSwitchToPrototype={() => setViewMode('prototype')} />
-    </AuthProvider>
-  );
+  return <PrototypeScreen />;
 }
