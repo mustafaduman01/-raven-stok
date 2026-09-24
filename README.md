@@ -76,14 +76,14 @@ git commit -m "feat: Raven Stok - Peynir Takip Paneli prototipi"
 
 # GitHub reponuzu bağlayın (kendi repo linkinizi yazın)
 git branch -M main
-git remote add origin https://github.com/KULLANICI_ADINIZ/raven-stok.git
+git remote add origin https://github.com/mustafaduman01/-raven-stok.git
 git push -u origin main
 ```
 
 ### GitHub Pages'i Aktif Etme:
 1. GitHub reponuzda **Settings** > **Pages** menüsüne gidin.
 2. **Build and deployment > Source** kısmını **GitHub Actions** olarak seçin.
-3. Projede hazır bulunan `.github/workflows/deploy.yml` sayesinde her `git push` işleminde siteniz otomatik olarak `https://<kullanici-adiniz>.github.io/raven-stok/` adresinde canlıya alınacaktır!
+3. Projede hazır bulunan `.github/workflows/deploy.yml` sayesinde her `git push` işleminde siteniz otomatik olarak `https://mustafaduman01.github.io/-raven-stok/` adresinde canlıya alınacaktır!
 
 ---
 
