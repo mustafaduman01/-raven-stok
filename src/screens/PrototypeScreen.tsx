@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
-  AlertTriangle,
-  CheckCircle2,
+  AlertCircle,
   Box,
   Layers,
   QrCode,
@@ -12,15 +11,16 @@ import {
   X,
   Search,
   Plus,
-  RefreshCw,
   ShieldCheck,
-  History,
-  ScanLine,
+  Clock,
   TrendingDown,
-  Sparkles,
   Info,
-  Calendar,
-  Factory,
+  Check,
+  ChevronRight,
+  SlidersHorizontal,
+  Package,
+  Activity,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface Material {
@@ -33,6 +33,7 @@ interface Material {
   lastMovement: string;
   location: string;
   lotNo?: string;
+  supplier?: string;
 }
 
 const INITIAL_MATERIALS: Material[] = [
@@ -44,9 +45,10 @@ const INITIAL_MATERIALS: Material[] = [
     unit: 'Adet',
     currentStock: 85, // KRİTİK SEVİYE
     minStock: 250,
-    lastMovement: '24.09.2026 14:15 - Sevk (-65)',
-    location: 'Ambalaj Deposu A-02',
+    lastMovement: '14:15 • Üretime Sevk (-65)',
+    location: 'Depo A • Göz 02',
     lotNo: 'LOT-KAS-500-24',
+    supplier: 'Öz Plastik San.',
   },
   {
     id: 'AMB-002',
@@ -55,9 +57,10 @@ const INITIAL_MATERIALS: Material[] = [
     unit: 'Adet',
     currentStock: 1420,
     minStock: 300,
-    lastMovement: '24.09.2026 11:20 - Giriş (+500)',
-    location: 'Ambalaj Deposu B-01',
+    lastMovement: '11:20 • Mal Kabul (+500)',
+    location: 'Depo B • Raf 01',
     lotNo: 'LOT-KUT-1000-19',
+    supplier: 'Ege Ambalaj A.Ş.',
   },
   {
     id: 'AMB-003',
@@ -66,9 +69,10 @@ const INITIAL_MATERIALS: Material[] = [
     unit: 'Adet',
     currentStock: 480,
     minStock: 150,
-    lastMovement: '23.09.2026 17:00 - Sevk (-40)',
-    location: 'Ambalaj Deposu C-04',
+    lastMovement: 'Dün • Üretime Sevk (-40)',
+    location: 'Depo C • Palet 04',
     lotNo: 'LOT-KOL-12-88',
+    supplier: 'Modern Oluklu Koli',
   },
   {
     id: 'AMB-004',
@@ -77,9 +81,10 @@ const INITIAL_MATERIALS: Material[] = [
     unit: 'Adet',
     currentStock: 6500,
     minStock: 1000,
-    lastMovement: '24.09.2026 09:30 - Sevk (-500)',
-    location: 'Etiket Dolabı E-01',
+    lastMovement: '09:30 • Üretime Sevk (-500)',
+    location: 'Etiket Kabini • Raf 01',
     lotNo: 'LOT-ETK-2026-05',
+    supplier: 'Baskı Teknik Ltd.',
   },
   // Hammadde Grubu
   {
@@ -89,9 +94,10 @@ const INITIAL_MATERIALS: Material[] = [
     unit: 'Litre',
     currentStock: 12500,
     minStock: 3000,
-    lastMovement: '24.09.2026 08:00 - Giriş (+5000)',
-    location: 'Süt Siloları Tank-1',
+    lastMovement: '08:00 • Mal Kabul (+5,000)',
+    location: 'Süt Siloları • Tank 01',
     lotNo: 'SUT-20260924-A',
+    supplier: 'Bölge Çiftçiler Birliği',
   },
   {
     id: 'HAM-002',
@@ -100,9 +106,10 @@ const INITIAL_MATERIALS: Material[] = [
     unit: 'Litre',
     currentStock: 45,
     minStock: 20,
-    lastMovement: '24.09.2026 10:15 - Sevk (-5)',
-    location: 'Soğuk Depo Maya Dolabı',
+    lastMovement: '10:15 • Üretime Sevk (-5)',
+    location: 'Soğuk Oda • Dolap 03',
     lotNo: 'MAY-2026-091',
+    supplier: 'BiyoKimya Gıda',
   },
   {
     id: 'HAM-003',
@@ -111,9 +118,10 @@ const INITIAL_MATERIALS: Material[] = [
     unit: 'Kg',
     currentStock: 1850,
     minStock: 500,
-    lastMovement: '22.09.2026 16:45 - Sevk (-150)',
-    location: 'Tuz Deposu R-01',
+    lastMovement: 'Dün • Üretime Sevk (-150)',
+    location: 'Kuru Depo • Bölme 01',
     lotNo: 'TUZ-2026-44',
+    supplier: 'Kaya Tuzculuk',
   },
   {
     id: 'HAM-004',
@@ -122,9 +130,10 @@ const INITIAL_MATERIALS: Material[] = [
     unit: 'Kg',
     currentStock: 180,
     minStock: 50,
-    lastMovement: '23.09.2026 13:00 - Sevk (-20)',
-    location: 'Kimyasal/Katkı Odası',
+    lastMovement: 'Dün • Üretime Sevk (-20)',
+    location: 'Katkı Deposu • Raf 02',
     lotNo: 'CAL-2026-12',
+    supplier: 'Gıda Çözümleri A.Ş.',
   },
 ];
 
@@ -139,9 +148,12 @@ interface LogEntry {
 }
 
 export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ onSwitchToSystem }) => {
-  const [activeTab, setActiveTab] = useState<'HAMMADDE' | 'AMBALAJ'>('AMBALAJ');
+  const [activeTab, setActiveTab] = useState<'AMBALAJ' | 'HAMMADDE'>('AMBALAJ');
   const [materials, setMaterials] = useState<Material[]>(INITIAL_MATERIALS);
   const [searchTerm, setSearchTerm] = useState('');
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+
+  // Günlük hareket kayıtları
   const [logs, setLogs] = useState<LogEntry[]>([
     {
       id: 'log-1',
@@ -159,7 +171,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
       type: 'GİRİŞ',
       qty: 500,
       unit: 'Adet',
-      detail: 'Mal Kabul (Öz Ambalaj San.)',
+      detail: 'İrsaliye: İRS-9821 • Kabul Onaylı',
     },
   ]);
 
@@ -172,30 +184,27 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
   // Mal Kabul Formu
   const [mkMaterialId, setMkMaterialId] = useState('');
   const [mkQty, setMkQty] = useState('');
-  const [mkLot, setMkLot] = useState('LOT-202609-902');
-  const [mkSkt, setMkSkt] = useState('2027-09-30');
+  const [mkLot, setMkLot] = useState('LOT-2026-904');
+  const [mkSkt, setMkSkt] = useState('2027-10-15');
   const [showQrPreview, setShowQrPreview] = useState(false);
 
   // Sevk & İade Formu
   const [sevkTab, setSevkTab] = useState<'EXIT' | 'RETURN'>('EXIT');
   const [sevkMaterialId, setSevkMaterialId] = useState('');
   const [exitQty, setExitQty] = useState('');
-  const [exitLine, setExitLine] = useState('Beyaz Peynir Paketleme');
-  const [exitPerson, setExitPerson] = useState('Mehmet Usta');
+  const [exitLine, setExitLine] = useState('Kaşar Paketleme Hattı');
+  const [exitPerson, setExitPerson] = useState('Ahmet Usta (Vardiya 1)');
 
   // İade & Fire Hesabı
-  const [returnIssuedQty, setReturnIssuedQty] = useState('100'); // Verilen miktar
-  const [returnGoodQty, setReturnGoodQty] = useState('92'); // Sağlam dönen miktar
+  const [returnIssuedQty, setReturnIssuedQty] = useState('100');
+  const [returnGoodQty, setReturnGoodQty] = useState('92');
   const [wasteReason, setWasteReason] = useState('Hatta Ezilme / Vakum Kaçağı');
-
-  // Bildirim Banner'ı (Kritik Stok)
-  const [bannerDismissed, setBannerDismissed] = useState(false);
 
   // Mobil Tarayıcı Simülasyonu
   const [mobileScannedItem, setMobileScannedItem] = useState<Material | null>(null);
   const [mobileFeedback, setMobileFeedback] = useState<string | null>(null);
 
-  // Filtrelenmiş liste
+  // Filtreleme
   const filteredMaterials = materials.filter((m) => {
     const matchesTab = m.category === activeTab;
     const matchesSearch =
@@ -205,9 +214,10 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
     return matchesTab && matchesSearch;
   });
 
-  // Kritik stoktaki 500gr Kase kontrolü
+  // Kritik Stoktaki Ürün Kontrolü
   const kaseItem = materials.find((m) => m.id === 'AMB-001');
   const isKaseCritical = kaseItem ? kaseItem.currentStock < kaseItem.minStock : false;
+  const criticalCount = materials.filter((m) => m.currentStock < m.minStock).length;
 
   // 1. Mal Kabul İşlemi
   const handleConfirmMalKabul = () => {
@@ -226,7 +236,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
           return {
             ...item,
             currentStock: newStock,
-            lastMovement: `Bugün ${nowStr} - Mal Kabul (+${qtyNum})`,
+            lastMovement: `Bugün ${nowStr} • Mal Kabul (+${qtyNum})`,
             lotNo: mkLot || item.lotNo,
           };
         }
@@ -243,7 +253,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
         type: 'GİRİŞ',
         qty: qtyNum,
         unit: targetMat?.unit || 'Adet',
-        detail: `Parti: ${mkLot} (Depoya Giriş Yapıldı)`,
+        detail: `Parti: ${mkLot} • İrsaliye Kabul Edildi`,
       },
       ...prev,
     ]);
@@ -258,13 +268,13 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
     const targetId = sevkMaterialId || selectedMaterial?.id || 'AMB-001';
     const qtyNum = Number(exitQty);
     if (!qtyNum || qtyNum <= 0) {
-      alert('Lütfen geçerli bir çıkış miktarı giriniz.');
+      alert('Lütfen geçerli bir miktar giriniz.');
       return;
     }
 
     const currentItem = materials.find((m) => m.id === targetId);
     if (currentItem && currentItem.currentStock < qtyNum) {
-      alert(`Yetersiz stok! Mevcut stok: ${currentItem.currentStock} ${currentItem.unit}`);
+      alert(`Yetersiz stok! Mevcut miktar: ${currentItem.currentStock} ${currentItem.unit}`);
       return;
     }
 
@@ -275,7 +285,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
           return {
             ...item,
             currentStock: Math.max(0, item.currentStock - qtyNum),
-            lastMovement: `Bugün ${nowStr} - Üretime Sevk (-${qtyNum})`,
+            lastMovement: `Bugün ${nowStr} • Üretime Sevk (-${qtyNum})`,
           };
         }
         return item;
@@ -290,7 +300,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
         type: 'ÇIKIŞ',
         qty: qtyNum,
         unit: currentItem?.unit || 'Adet',
-        detail: `${exitLine} - Teslim: ${exitPerson}`,
+        detail: `${exitLine} • Teslim: ${exitPerson}`,
       },
       ...prev,
     ]);
@@ -299,7 +309,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
     setExitQty('');
   };
 
-  // 3. Üretimden İade Al & Fire Kaydet
+  // 3. Üretimden İade Al & Fire Hesabı
   const calculatedWaste = Math.max(0, Number(returnIssuedQty) - Number(returnGoodQty));
 
   const handleConfirmReturn = () => {
@@ -308,7 +318,6 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
     const nowStr = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
     const currentItem = materials.find((m) => m.id === targetId);
 
-    // Sağlam olan adedi stoğa geri ekle
     if (goodNum > 0) {
       setMaterials((prev) =>
         prev.map((item) => {
@@ -316,7 +325,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
             return {
               ...item,
               currentStock: item.currentStock + goodNum,
-              lastMovement: `Bugün ${nowStr} - Üretimden İade (+${goodNum})`,
+              lastMovement: `Bugün ${nowStr} • Sağlam İade (+${goodNum})`,
             };
           }
           return item;
@@ -331,13 +340,12 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
           type: 'İADE',
           qty: goodNum,
           unit: currentItem?.unit || 'Adet',
-          detail: 'Sağlam kalan iade stoğa geri eklendi',
+          detail: 'Üretimden sağlam iade depoya alındı',
         },
         ...prev,
       ]);
     }
 
-    // Fire varsa fire kaydı düş
     if (calculatedWaste > 0) {
       setLogs((prev) => [
         {
@@ -370,7 +378,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
             : m,
         ),
       );
-      setMobileFeedback(`✅ 20 ${mobileScannedItem.unit} üretime sevk edildi!`);
+      setMobileFeedback(`-20 ${mobileScannedItem.unit} üretime sevk edildi`);
       setLogs((prev) => [
         {
           id: `mob-${Date.now()}`,
@@ -379,7 +387,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
           type: 'ÇIKIŞ',
           qty: dropQty,
           unit: mobileScannedItem.unit,
-          detail: 'Mobil QR Okutma ile Hızlı Çıkış',
+          detail: 'Mobil El Terminali ile Hızlı Sevk',
         },
         ...prev,
       ]);
@@ -390,7 +398,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
           m.id === mobileScannedItem.id ? { ...m, currentStock: m.currentStock + returnQty } : m,
         ),
       );
-      setMobileFeedback(`✅ 15 ${mobileScannedItem.unit} sağlam iade olarak depoya alındı!`);
+      setMobileFeedback(`+15 ${mobileScannedItem.unit} depoya sağlam iade edildi`);
       setLogs((prev) => [
         {
           id: `mob-${Date.now()}`,
@@ -399,7 +407,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
           type: 'İADE',
           qty: returnQty,
           unit: mobileScannedItem.unit,
-          detail: 'Mobil QR Okutma ile Sağlam İade',
+          detail: 'Mobil El Terminali ile İade',
         },
         ...prev,
       ]);
@@ -411,115 +419,162 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 font-sans pb-16">
-      {/* 1. ÜST BAR & YETKİ SİMÜLASYONU */}
-      <header className="bg-slate-950 border-b border-slate-800 sticky top-0 z-30 shadow-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-3">
+    <div className="min-h-screen bg-[#fafafa] text-zinc-900 font-sans antialiased selection:bg-zinc-200">
+      {/* 1. ÜST BAR (MINIMALIST & SOFISTIKE) */}
+      <header className="bg-white border-b border-zinc-200/80 sticky top-0 z-30">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+          {/* Logo & Başlık */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-2xl shadow-inner shadow-amber-500/10">
-              🧀
+            <div className="w-8 h-8 rounded-lg bg-zinc-900 text-white flex items-center justify-center font-bold text-sm tracking-wider shadow-xs">
+              R
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-base sm:text-lg font-bold text-white tracking-tight">
-                  RAVEN STOK
-                </h1>
-                <span className="text-[10px] uppercase font-extrabold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  Prototip Simülatörü
+                <span className="font-semibold text-sm tracking-tight text-zinc-900">Raven Stok</span>
+                <span className="text-[10px] font-medium text-zinc-400 bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200/60">
+                  Prototip
                 </span>
               </div>
-              <p className="text-xs text-slate-400">Peynir Üretim Tesisi — Stok & Fire Takip Paneli</p>
+              <p className="text-[11px] text-zinc-500 font-normal leading-none mt-0.5">
+                Peynir Üretim & Ambalaj Takip Sistemi
+              </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 sm:gap-4">
-            {/* Yetki Etiketi */}
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-xs">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>
-                Giriş Yapan: <strong className="text-white">Depo Sorumlusu (Yetkili)</strong>
+          {/* Yetki Göstergesi & Butonlar */}
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            {/* Kullanıcı Rozeti */}
+            <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-full bg-zinc-50 border border-zinc-200/80 text-xs text-zinc-600">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 ring-2 ring-emerald-500/20"></span>
+              <span className="text-[11px]">
+                Giriş Yapan: <strong className="font-semibold text-zinc-800">Depo Sorumlusu (Yetkili)</strong>
               </span>
             </div>
 
-            {/* Mobil Kamera Butonu (Üst Bar) */}
+            {/* Mobil Tarayıcı Simülatör Butonu */}
             <button
               onClick={() => {
                 setMobileScannedItem(materials.find((m) => m.id === 'AMB-001') || materials[0]);
                 setShowMobileModal(true);
               }}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-sm transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium transition shadow-xs active:scale-98"
             >
-              <Smartphone className="w-4 h-4" />
+              <Smartphone className="w-3.5 h-3.5 text-zinc-300" />
               <span>Mobil Tarayıcı</span>
             </button>
 
             {onSwitchToSystem && (
               <button
                 onClick={onSwitchToSystem}
-                className="text-xs text-slate-400 hover:text-white underline underline-offset-4"
+                className="text-xs text-zinc-500 hover:text-zinc-900 px-2 py-1 transition"
               >
-                Tam Sisteme Geç
+                Tam Sistem →
               </button>
             )}
           </div>
         </div>
 
-        {/* KRİTİK STOK UYARI BANNER'I */}
+        {/* 2. KRİTİK STOK UYARI BANNER'I (ZARİF & DİKKAT ÇEKİCİ) */}
         {!bannerDismissed && isKaseCritical && (
-          <div className="bg-gradient-to-r from-red-600 via-amber-600 to-red-600 text-white px-4 py-2 text-xs sm:text-sm font-semibold flex items-center justify-between shadow-inner animate-pulse">
-            <div className="flex items-center gap-2.5 max-w-7xl mx-auto w-full">
-              <AlertTriangle className="w-5 h-5 flex-shrink-0 text-amber-200" />
-              <span>
-                <strong>Kritik Stok Uyarısı:</strong> 500gr Kase stoğu kritik eşiğin altına indi! (Kalan: {kaseItem?.currentStock} Adet / Asgari: {kaseItem?.minStock} Adet)
-              </span>
+          <div className="bg-amber-50 border-t border-b border-amber-200/70 px-4 py-2 text-xs">
+            <div className="max-w-6xl mx-auto flex items-center justify-between gap-3 text-amber-900">
+              <div className="flex items-center gap-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span className="text-[12px]">
+                  <strong>Kritik Stok Uyarısı:</strong> 500gr Kase stoğu kritik eşiğin altına indi (Kalan: <strong>{kaseItem?.currentStock} Adet</strong> / Asgari: {kaseItem?.minStock} Adet).
+                </span>
+                <button
+                  onClick={() => {
+                    const target = materials.find((m) => m.id === 'AMB-001') || materials[0];
+                    setSelectedMaterial(target);
+                    setMkMaterialId(target.id);
+                    setShowQrPreview(false);
+                    setShowMalKabulModal(true);
+                  }}
+                  className="hidden md:inline-flex items-center gap-1 font-semibold underline underline-offset-2 hover:text-amber-950 ml-1"
+                >
+                  Hemen Mal Kabul Yap →
+                </button>
+              </div>
+
+              <button
+                onClick={() => setBannerDismissed(true)}
+                className="text-amber-700/70 hover:text-amber-900 p-0.5"
+                title="Kapat"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
-            <button
-              onClick={() => setBannerDismissed(true)}
-              className="text-white/80 hover:text-white ml-2 p-1"
-              title="Kapat"
-            >
-              <X className="w-4 h-4" />
-            </button>
           </div>
         )}
       </header>
 
       {/* ANA İÇERİK ALANI */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
-        {/* Hızlı İstatistik & Aksiyon Butonları */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-6">
-          {/* 2. SEKMELER (TABS) */}
-          <div className="flex items-center bg-slate-950 p-1.5 rounded-xl border border-slate-800 shadow-sm w-full sm:w-auto">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        {/* KPI ÖZET KARTLARI (MINIMALIST KARELER) */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-white p-3.5 rounded-xl border border-zinc-200/80 shadow-xs">
+            <div className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Toplam Kalem</div>
+            <div className="text-xl font-semibold text-zinc-900 mt-1">8 Malzeme</div>
+            <div className="text-[11px] text-zinc-400 mt-0.5">4 Hammadde • 4 Ambalaj</div>
+          </div>
+
+          <div className="bg-white p-3.5 rounded-xl border border-zinc-200/80 shadow-xs">
+            <div className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Kritik Stok</div>
+            <div className="text-xl font-semibold text-amber-600 mt-1 flex items-center gap-1.5">
+              <span>{criticalCount} Kalem</span>
+              {criticalCount > 0 && <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>}
+            </div>
+            <div className="text-[11px] text-amber-700/80 mt-0.5">500gr Kase takviye bekliyor</div>
+          </div>
+
+          <div className="bg-white p-3.5 rounded-xl border border-zinc-200/80 shadow-xs">
+            <div className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Bugünkü Sevk</div>
+            <div className="text-xl font-semibold text-zinc-900 mt-1">1,070 Adet / Lt</div>
+            <div className="text-[11px] text-emerald-600 mt-0.5">Üretim planına uygun</div>
+          </div>
+
+          <div className="bg-white p-3.5 rounded-xl border border-zinc-200/80 shadow-xs">
+            <div className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Günlük Fire Oranı</div>
+            <div className="text-xl font-semibold text-zinc-900 mt-1">%1.2</div>
+            <div className="text-[11px] text-zinc-400 mt-0.5">Hedef eşik: &lt; %3.0</div>
+          </div>
+        </div>
+
+        {/* SEKME SEÇİMİ VE ANA AKSİYONLAR */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
+          {/* Segmented Control (Sekmeler) */}
+          <div className="inline-flex bg-zinc-100 p-1 rounded-xl border border-zinc-200/60">
             <button
-              onClick={() => setActiveTab('HAMMADDE')}
-              className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
-                activeTab === 'HAMMADDE'
-                  ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
-                  : 'text-slate-400 hover:text-white'
+              onClick={() => setActiveTab('AMBALAJ')}
+              className={`flex items-center gap-2 px-4 py-1.5 text-xs font-medium rounded-lg transition ${
+                activeTab === 'AMBALAJ'
+                  ? 'bg-white text-zinc-900 shadow-xs font-semibold'
+                  : 'text-zinc-600 hover:text-zinc-900'
               }`}
             >
-              <Box className="w-4 h-4" />
-              <span>Hammadde Deposu (Kg/Lt)</span>
+              <Layers className="w-3.5 h-3.5 text-zinc-500" />
+              <span>Ambalaj & Sarf Malzeme</span>
+              {isKaseCritical && (
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+              )}
             </button>
 
             <button
-              onClick={() => setActiveTab('AMBALAJ')}
-              className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
-                activeTab === 'AMBALAJ'
-                  ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
-                  : 'text-slate-400 hover:text-white'
+              onClick={() => setActiveTab('HAMMADDE')}
+              className={`flex items-center gap-2 px-4 py-1.5 text-xs font-medium rounded-lg transition ${
+                activeTab === 'HAMMADDE'
+                  ? 'bg-white text-zinc-900 shadow-xs font-semibold'
+                  : 'text-zinc-600 hover:text-zinc-900'
               }`}
             >
-              <Layers className="w-4 h-4" />
-              <span>Ambalaj & Sarf (Adet)</span>
-              {isKaseCritical && (
-                <span className="w-2 h-2 rounded-full bg-red-500 animate-ping ml-0.5"></span>
-              )}
+              <Box className="w-3.5 h-3.5 text-zinc-500" />
+              <span>Hammadde Deposu</span>
             </button>
           </div>
 
-          {/* Ana Butonlar (Mal Kabul & Sevk) */}
-          <div className="flex items-center gap-2.5">
+          {/* Aksiyon Butonları */}
+          <div className="flex items-center gap-2">
             <button
               onClick={() => {
                 const target = filteredMaterials[0] || materials[0];
@@ -528,9 +583,9 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                 setShowQrPreview(false);
                 setShowMalKabulModal(true);
               }}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-semibold shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium shadow-xs transition active:scale-98"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5" />
               <span>Mal Kabul & QR Bas</span>
             </button>
 
@@ -542,52 +597,52 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                 setSevkTab('EXIT');
                 setShowSevkModal(true);
               }}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs sm:text-sm font-semibold shadow-lg shadow-amber-900/30 transition-all active:scale-95"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-white hover:bg-zinc-50 text-zinc-800 border border-zinc-200/90 text-xs font-medium shadow-xs transition active:scale-98"
             >
-              <ArrowUpRight className="w-4 h-4" />
+              <ArrowUpRight className="w-3.5 h-3.5 text-zinc-500" />
               <span>Üretime Sevk / İade</span>
             </button>
           </div>
         </div>
 
-        {/* Arama & Bilgi Satırı */}
-        <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80 mb-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+        {/* ARAMA ÇUBUĞU */}
+        <div className="bg-white p-2.5 rounded-xl border border-zinc-200/80 shadow-xs flex items-center justify-between gap-3">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
             <input
               type="text"
-              placeholder="Malzeme adı, kod veya raf ara..."
+              placeholder="Malzeme adı, parti no veya raf ara..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700/80 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+              className="w-full bg-zinc-50 border border-zinc-200/70 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-800 placeholder-zinc-400 focus:outline-none focus:bg-white focus:border-zinc-400 transition"
             />
           </div>
 
-          <div className="flex items-center gap-3 text-xs text-slate-400 w-full sm:w-auto justify-end">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Normal Seviye
+          <div className="text-[11px] text-zinc-500 flex items-center gap-3">
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Normal
             </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Kritik Eşik Altı
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-amber-500"></span> Kritik Seviye
             </span>
           </div>
         </div>
 
-        {/* 3. ANA TABLO & MALZEME LİSTESİ */}
-        <div className="bg-slate-950 rounded-2xl border border-slate-800 shadow-xl overflow-hidden mb-8">
+        {/* 3. ANA MALZEME LİSTESİ TABLOSU */}
+        <div className="bg-white rounded-xl border border-zinc-200/80 shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs sm:text-sm">
-              <thead className="bg-slate-900/80 text-slate-400 uppercase text-[11px] font-bold border-b border-slate-800">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-zinc-50/75 text-zinc-500 uppercase text-[10px] font-semibold tracking-wider border-b border-zinc-200/80">
                 <tr>
-                  <th className="py-3.5 px-4">Malzeme Adı & Kod</th>
-                  <th className="py-3.5 px-3">Kategori & Lokasyon</th>
-                  <th className="py-3.5 px-3">Mevcut Stok</th>
-                  <th className="py-3.5 px-3">Kritik Eşik</th>
-                  <th className="py-3.5 px-3">Son Hareket</th>
-                  <th className="py-3.5 px-4 text-right">İşlemler</th>
+                  <th className="py-3 px-4">Malzeme Adı</th>
+                  <th className="py-3 px-3">Kategori & Lokasyon</th>
+                  <th className="py-3 px-3">Mevcut Stok</th>
+                  <th className="py-3 px-3">Kritik Eşik</th>
+                  <th className="py-3 px-3">Son Hareket</th>
+                  <th className="py-3 px-4 text-right">İşlemler</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-medium">
+              <tbody className="divide-y divide-zinc-100">
                 {filteredMaterials.map((item) => {
                   const isCritical = item.currentStock < item.minStock;
                   return (
@@ -595,75 +650,72 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                       key={item.id}
                       className={`transition-colors ${
                         isCritical
-                          ? 'bg-amber-950/20 hover:bg-amber-950/30 border-l-4 border-amber-500'
-                          : 'hover:bg-slate-900/50'
+                          ? 'bg-amber-50/40 hover:bg-amber-50/70'
+                          : 'hover:bg-zinc-50/60'
                       }`}
                     >
-                      {/* Malzeme Adı */}
+                      {/* Malzeme Adı & Kod */}
                       <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-2.5">
+                        <div className="flex items-center gap-3">
                           <div
-                            className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${
-                              isCritical ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-800 text-slate-300'
+                            className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-mono font-medium ${
+                              isCritical ? 'bg-amber-100 text-amber-800' : 'bg-zinc-100 text-zinc-600'
                             }`}
                           >
-                            {item.category === 'AMBALAJ' ? '📦' : '🥛'}
+                            {item.id.split('-')[0]}
                           </div>
                           <div>
-                            <div className="font-bold text-white flex items-center gap-2">
-                              {item.name}
+                            <div className="font-semibold text-zinc-900 flex items-center gap-2">
+                              <span>{item.name}</span>
                               {isCritical && (
-                                <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse">
-                                  ⚠️ Kritik
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                  Kritik
                                 </span>
                               )}
                             </div>
-                            <div className="text-[11px] text-slate-400">
-                              Kod: <code className="text-amber-400/90">{item.id}</code>
-                              {item.lotNo && ` • Parti: ${item.lotNo}`}
+                            <div className="text-[11px] text-zinc-400 font-mono mt-0.5">
+                              {item.id} {item.lotNo && `• ${item.lotNo}`}
                             </div>
                           </div>
                         </div>
                       </td>
 
-                      {/* Kategori & Lokasyon */}
-                      <td className="py-3.5 px-3 text-slate-300">
-                        <div className="text-xs font-semibold text-slate-200">
-                          {item.category === 'AMBALAJ' ? 'Ambalaj / Kutu' : 'Hammadde'}
-                        </div>
-                        <div className="text-[11px] text-slate-500">{item.location}</div>
+                      {/* Lokasyon */}
+                      <td className="py-3.5 px-3">
+                        <div className="text-zinc-700 font-medium">{item.location}</div>
+                        <div className="text-[11px] text-zinc-400">{item.supplier}</div>
                       </td>
 
                       {/* Mevcut Stok */}
                       <td className="py-3.5 px-3">
                         <div
-                          className={`text-sm sm:text-base font-extrabold ${
-                            isCritical ? 'text-amber-400' : 'text-emerald-400'
+                          className={`font-mono text-sm font-semibold tabular-nums ${
+                            isCritical ? 'text-amber-700 font-bold' : 'text-zinc-900'
                           }`}
                         >
                           {item.currentStock.toLocaleString('tr-TR')} {item.unit}
                         </div>
                         {isCritical && (
-                          <div className="text-[10px] text-red-400 font-bold">
-                            Eşiğin {item.minStock - item.currentStock} {item.unit} altında!
+                          <div className="text-[10px] text-amber-600">
+                            Eşiğin {item.minStock - item.currentStock} altı
                           </div>
                         )}
                       </td>
 
                       {/* Kritik Eşik */}
-                      <td className="py-3.5 px-3 text-slate-400">
+                      <td className="py-3.5 px-3 text-zinc-500 font-mono tabular-nums">
                         {item.minStock.toLocaleString('tr-TR')} {item.unit}
                       </td>
 
                       {/* Son Hareket */}
-                      <td className="py-3.5 px-3">
-                        <div className="text-xs text-slate-300">{item.lastMovement}</div>
+                      <td className="py-3.5 px-3 text-zinc-500">
+                        {item.lastMovement}
                       </td>
 
-                      {/* İşlemler Butonları */}
+                      {/* Hızlı İşlemler */}
                       <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {/* Hızlı Mal Kabul */}
+                        <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => {
                               setSelectedMaterial(item);
@@ -672,12 +724,11 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                               setShowMalKabulModal(true);
                             }}
                             title="Mal Kabul Yap & QR Bas"
-                            className="p-1.5 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-400 border border-emerald-800/40 transition-colors"
+                            className="p-1.5 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition"
                           >
                             <Plus className="w-4 h-4" />
                           </button>
 
-                          {/* Üretime Sevk / İade */}
                           <button
                             onClick={() => {
                               setSelectedMaterial(item);
@@ -685,13 +736,12 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                               setSevkTab('EXIT');
                               setShowSevkModal(true);
                             }}
-                            title="Üretime Çıkış Yap veya İade Al"
-                            className="p-1.5 rounded-lg bg-amber-950/60 hover:bg-amber-900/60 text-amber-400 border border-amber-800/40 transition-colors"
+                            title="Üretime Sevk / İade"
+                            className="p-1.5 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition"
                           >
                             <ArrowUpRight className="w-4 h-4" />
                           </button>
 
-                          {/* Termal QR Etiketi */}
                           <button
                             onClick={() => {
                               setSelectedMaterial(item);
@@ -699,8 +749,8 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                               setShowQrPreview(true);
                               setShowMalKabulModal(true);
                             }}
-                            title="Termal QR Etiketi Önizle"
-                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+                            title="Termal Etiket Görüntüle"
+                            className="p-1.5 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition"
                           >
                             <Printer className="w-4 h-4" />
                           </button>
@@ -714,42 +764,42 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
           </div>
         </div>
 
-        {/* CANLI HAREKET & FİRE GÜNLÜĞÜ (MOCK LOGS) */}
-        <div className="bg-slate-950 rounded-2xl border border-slate-800 p-4 sm:p-5 shadow-xl">
-          <div className="flex items-center justify-between mb-3 border-b border-slate-800 pb-2.5">
+        {/* CANLI HAREKET GÜNLÜĞÜ (MINIMAL FEED) */}
+        <div className="bg-white rounded-xl border border-zinc-200/80 shadow-xs p-4">
+          <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
             <div className="flex items-center gap-2">
-              <History className="w-4 h-4 text-amber-400" />
-              <h3 className="text-sm font-bold text-white">Anlık Simülasyon Hareket & Fire Akışı</h3>
+              <Clock className="w-3.5 h-3.5 text-zinc-500" />
+              <h3 className="text-xs font-semibold text-zinc-800 uppercase tracking-wider">
+                Depo Hareket & Fire Akışı
+              </h3>
             </div>
-            <span className="text-[11px] text-slate-400">Son yapılan işlemler canlı düşer</span>
+            <span className="text-[11px] text-zinc-400">Canlı simülasyon kayıtları</span>
           </div>
 
-          <div className="space-y-2">
+          <div className="divide-y divide-zinc-100 mt-1">
             {logs.map((log) => (
-              <div
-                key={log.id}
-                className="flex items-center justify-between bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/60 text-xs"
-              >
+              <div key={log.id} className="py-2.5 flex items-center justify-between text-xs gap-3">
                 <div className="flex items-center gap-2.5">
-                  <span className="font-mono text-slate-500 text-[11px]">{log.time}</span>
+                  <span className="font-mono text-zinc-400 text-[11px]">{log.time}</span>
                   <span
-                    className={`font-bold px-2 py-0.5 rounded text-[10px] ${
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wide ${
                       log.type === 'GİRİŞ'
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        ? 'bg-emerald-50 text-emerald-700'
                         : log.type === 'ÇIKIŞ'
-                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                        ? 'bg-zinc-100 text-zinc-700'
                         : log.type === 'FİRE'
-                        ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                        : 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
+                        ? 'bg-rose-50 text-rose-700'
+                        : 'bg-indigo-50 text-indigo-700'
                     }`}
                   >
                     {log.type}
                   </span>
-                  <span className="font-semibold text-slate-200">{log.materialName}</span>
+                  <span className="font-medium text-zinc-800">{log.materialName}</span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-slate-400">{log.detail}</span>
-                  <span className="font-extrabold text-white">
+
+                <div className="flex items-center gap-4">
+                  <span className="text-zinc-400 text-[11px] hidden sm:inline">{log.detail}</span>
+                  <span className="font-mono font-semibold text-zinc-800">
                     {log.type === 'ÇIKIŞ' || log.type === 'FİRE' ? '-' : '+'}
                     {log.qty} {log.unit}
                   </span>
@@ -761,160 +811,146 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
       </main>
 
       {/* ========================================================================= */}
-      {/* 4. TIKLANABİLİR MODALLAR (SİMÜLASYON) */}
+      {/* MODALLAR (MINIMALIST & NET) */}
       {/* ========================================================================= */}
 
       {/* MODAL 1: MAL KABUL & QR BAS */}
       {showMalKabulModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150">
-            <div className="bg-slate-950 p-4 border-b border-slate-800 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-zinc-950/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-zinc-200 rounded-2xl w-full max-w-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+            <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Box className="w-5 h-5 text-emerald-400" />
-                <h3 className="font-bold text-white text-base">Mal Kabul & Termal QR Bas</h3>
+                <Box className="w-4 h-4 text-zinc-700" />
+                <h3 className="font-semibold text-zinc-900 text-sm">Mal Kabul & Termal QR Baskı</h3>
               </div>
               <button
                 onClick={() => setShowMalKabulModal(false)}
-                className="text-slate-400 hover:text-white p-1"
+                className="text-zinc-400 hover:text-zinc-700 p-1"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
-              {/* Malzeme Seçimi */}
+            <div className="p-5 space-y-3.5">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Kabul Edilecek Malzeme:
-                </label>
+                <label className="block text-xs font-medium text-zinc-600 mb-1">Kabul Malzemesi</label>
                 <select
                   value={mkMaterialId}
                   onChange={(e) => setMkMaterialId(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2 text-xs text-zinc-900 focus:outline-none focus:border-zinc-400"
                 >
                   {materials.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.name} ({m.category} - Mevcut: {m.currentStock} {m.unit})
+                      {m.name} ({m.currentStock} {m.unit} mevcut)
                     </option>
                   ))}
                 </select>
               </div>
 
-              {/* Miktar & Parti No */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Gelen Miktar:
-                  </label>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Gelen Miktar</label>
                   <input
                     type="number"
                     placeholder="Örn: 500"
                     value={mkQty}
                     onChange={(e) => setMkQty(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2 text-xs text-zinc-900 focus:outline-none focus:border-zinc-400"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Parti / Lot No:</label>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Parti / Lot No</label>
                   <input
                     type="text"
                     value={mkLot}
                     onChange={(e) => setMkLot(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2 text-xs text-zinc-900 font-mono focus:outline-none focus:border-zinc-400"
                   />
                 </div>
               </div>
 
-              {/* Son Kullanma Tarihi */}
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Son Kullanma Tarihi (SKT):
-                </label>
+                <label className="block text-xs font-medium text-zinc-600 mb-1">Son Kullanma Tarihi (SKT)</label>
                 <input
                   type="date"
                   value={mkSkt}
                   onChange={(e) => setMkSkt(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2 text-xs text-zinc-900 focus:outline-none focus:border-zinc-400"
                 />
               </div>
 
-              {/* QR Etiket Önizleme Butonu */}
               <div className="pt-1">
                 <button
                   type="button"
                   onClick={() => setShowQrPreview(!showQrPreview)}
-                  className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-semibold border border-slate-700 transition-colors"
+                  className="w-full py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200/80 text-zinc-700 text-xs font-medium transition flex items-center justify-center gap-1.5"
                 >
-                  <QrCode className="w-4 h-4" />
-                  <span>{showQrPreview ? 'Önizlemeyi Gizle' : '50x30mm QR Termal Etiket Önizle'}</span>
+                  <QrCode className="w-3.5 h-3.5" />
+                  <span>{showQrPreview ? 'Önizlemeyi Kapat' : '50x30mm Termal Etiket Tasarımını Önizle'}</span>
                 </button>
               </div>
 
-              {/* 50x30mm TERMAL ETİKET ÖNİZLEME ALANI */}
+              {/* 50x30mm TERMAL ETİKET ÖNİZLEMESİ (GERÇEKÇİ & ZARİF) */}
               {showQrPreview && (
-                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex flex-col items-center">
-                  <div className="text-[11px] font-bold text-slate-400 mb-2">
-                    🖨️ Zebra ZPL Endüstriyel Termal Etiket (50mm x 30mm Örnek)
+                <div className="p-3 bg-zinc-100/70 rounded-xl border border-zinc-200/80 flex flex-col items-center">
+                  <div className="text-[10px] font-medium text-zinc-500 mb-2">
+                    Zebra ZPL Standartlarında 50mm x 30mm Termal Çıktı
                   </div>
-                  {/* Etiket Kartı */}
-                  <div className="w-[280px] h-[168px] bg-white text-black p-2.5 rounded shadow-lg border border-slate-300 flex flex-col justify-between font-mono text-[9px] leading-tight select-none">
-                    <div className="border-b border-black pb-1 flex justify-between items-center">
-                      <span className="font-extrabold text-[10px]">RAVEN STOK SİSTEMİ</span>
-                      <span className="text-[8px] bg-black text-white px-1 font-bold">KABUL ONAYLI</span>
+
+                  <div className="w-[270px] h-[162px] bg-white text-zinc-900 p-3 rounded shadow-xs border border-zinc-300 flex flex-col justify-between font-mono text-[9px] select-none">
+                    <div className="border-b border-zinc-900 pb-1 flex justify-between items-center">
+                      <span className="font-bold text-[10px] tracking-tight">RAVEN STOK</span>
+                      <span className="text-[8px] bg-zinc-900 text-white px-1 font-semibold">KABUL</span>
                     </div>
 
                     <div className="flex gap-2 items-center py-1">
-                      {/* Simüle QR Kod */}
-                      <div className="w-16 h-16 bg-black p-1 rounded flex items-center justify-center flex-shrink-0">
+                      {/* Vektör QR Simülasyonu */}
+                      <div className="w-14 h-14 bg-zinc-900 p-1 rounded flex items-center justify-center shrink-0">
                         <div className="w-full h-full bg-white p-0.5 flex flex-wrap gap-0.5 items-center justify-center">
-                          <div className="w-3 h-3 bg-black"></div>
-                          <div className="w-3 h-3 bg-black"></div>
-                          <div className="w-1 h-1 bg-black"></div>
-                          <div className="w-3 h-3 bg-black"></div>
-                          <div className="w-2 h-2 bg-black"></div>
+                          <div className="w-2.5 h-2.5 bg-zinc-900"></div>
+                          <div className="w-2.5 h-2.5 bg-zinc-900"></div>
+                          <div className="w-1 h-1 bg-zinc-900"></div>
+                          <div className="w-2.5 h-2.5 bg-zinc-900"></div>
+                          <div className="w-2 h-2 bg-zinc-900"></div>
                         </div>
                       </div>
 
-                      <div className="flex-1 overflow-hidden space-y-0.5">
-                        <div className="font-black text-[10px] truncate">
+                      <div className="flex-1 overflow-hidden space-y-0.5 leading-tight">
+                        <div className="font-bold text-[10px] truncate text-zinc-900">
                           {materials.find((m) => m.id === (mkMaterialId || selectedMaterial?.id))?.name}
                         </div>
-                        <div>
-                          KOD: <strong>{mkMaterialId || selectedMaterial?.id}</strong>
+                        <div className="text-zinc-600">
+                          KOD: <strong className="text-zinc-900">{mkMaterialId || selectedMaterial?.id}</strong>
                         </div>
-                        <div>
-                          PARTİ: <strong>{mkLot}</strong>
+                        <div className="text-zinc-600">
+                          PARTİ: <strong className="text-zinc-900">{mkLot}</strong>
                         </div>
-                        <div>
-                          SKT: <strong>{mkSkt}</strong>
-                        </div>
-                        <div>
-                          MİKTAR: <strong>{mkQty || '500'} Adet/Kg</strong>
+                        <div className="text-zinc-600">
+                          SKT: <strong className="text-zinc-900">{mkSkt}</strong>
                         </div>
                       </div>
                     </div>
 
-                    <div className="border-t border-dashed border-black pt-0.5 text-center text-[8px] font-bold text-slate-800">
-                      *PRD-{mkMaterialId || selectedMaterial?.id}* | FEFO İZLENEBİLİR
+                    <div className="border-t border-dashed border-zinc-300 pt-1 text-center text-[8px] text-zinc-500 font-sans">
+                      *PRD-{mkMaterialId || selectedMaterial?.id}* • FEFO İZLENEBİLİR
                     </div>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Modal Alt Butonlar */}
-            <div className="bg-slate-950 p-4 border-t border-slate-800 flex items-center justify-end gap-2.5">
+            <div className="px-5 py-3.5 bg-zinc-50 border-t border-zinc-100 flex items-center justify-end gap-2">
               <button
                 onClick={() => setShowMalKabulModal(false)}
-                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+                className="px-3.5 py-1.5 text-xs text-zinc-600 hover:text-zinc-900"
               >
                 İptal
               </button>
               <button
                 onClick={handleConfirmMalKabul}
-                className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-900/40"
+                className="px-4 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium shadow-xs transition"
               >
-                Stoğa Ekle & Etiketi Yazdır
+                Stoğa Ekle & Etiketi Bas
               </button>
             </div>
           </div>
@@ -923,178 +959,160 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
 
       {/* MODAL 2: ÜRETİME SEVK / İADE */}
       {showSevkModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150">
-            {/* Modal Başlığı & Sekmeler */}
-            <div className="bg-slate-950 p-4 border-b border-slate-800 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-zinc-950/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-zinc-200 rounded-2xl w-full max-w-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+            <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <ArrowUpRight className="w-5 h-5 text-amber-400" />
-                <h3 className="font-bold text-white text-base">Üretim Hareket Modülü</h3>
+                <ArrowUpRight className="w-4 h-4 text-zinc-700" />
+                <h3 className="font-semibold text-zinc-900 text-sm">Üretim Hareket Modülü</h3>
               </div>
-              <button onClick={() => setShowSevkModal(false)} className="text-slate-400 hover:text-white p-1">
-                <X className="w-5 h-5" />
+              <button
+                onClick={() => setShowSevkModal(false)}
+                className="text-zinc-400 hover:text-zinc-700 p-1"
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* İki Sekme: Üretime Çıkış vs Üretimden İade Al */}
-            <div className="flex border-b border-slate-800 bg-slate-950/60 p-1">
+            {/* İki Sekmeli Kontrol */}
+            <div className="px-5 pt-3 pb-1 border-b border-zinc-100 bg-zinc-50/50 flex gap-2">
               <button
                 onClick={() => setSevkTab('EXIT')}
-                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+                className={`py-1.5 px-3 text-xs rounded-lg transition font-medium ${
                   sevkTab === 'EXIT'
-                    ? 'bg-amber-600 text-white shadow'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-white text-zinc-900 shadow-xs border border-zinc-200/80 font-semibold'
+                    : 'text-zinc-500 hover:text-zinc-900'
                 }`}
               >
-                1. Üretime Çıkış Yap (Stoktan Düş)
+                Üretime Çıkış
               </button>
               <button
                 onClick={() => setSevkTab('RETURN')}
-                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+                className={`py-1.5 px-3 text-xs rounded-lg transition font-medium ${
                   sevkTab === 'RETURN'
-                    ? 'bg-indigo-600 text-white shadow'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-white text-zinc-900 shadow-xs border border-zinc-200/80 font-semibold'
+                    : 'text-zinc-500 hover:text-zinc-900'
                 }`}
               >
-                2. Üretimden İade Al & Fire Hesapla
+                Üretimden İade & Fire Hesabı
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
-              {/* Malzeme Seçimi */}
+            <div className="p-5 space-y-3.5">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">İşlem Yapılacak Malzeme:</label>
+                <label className="block text-xs font-medium text-zinc-600 mb-1">Malzeme</label>
                 <select
                   value={sevkMaterialId}
                   onChange={(e) => setSevkMaterialId(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2 text-xs text-zinc-900 focus:outline-none focus:border-zinc-400"
                 >
                   {materials.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.name} (Mevcut Stok: {m.currentStock} {m.unit})
+                      {m.name} (Mevcut: {m.currentStock} {m.unit})
                     </option>
                   ))}
                 </select>
               </div>
 
-              {/* SEKME 1: ÜRETİME ÇIKIŞ FORMU */}
               {sevkTab === 'EXIT' ? (
+                /* ÇIKIŞ FORMU */
                 <>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
-                      Çıkarılacak Miktar:
-                    </label>
+                    <label className="block text-xs font-medium text-zinc-600 mb-1">Çıkarılacak Miktar</label>
                     <input
                       type="number"
                       placeholder="Örn: 50"
                       value={exitQty}
                       onChange={(e) => setExitQty(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                      className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2 text-xs text-zinc-900 focus:outline-none focus:border-zinc-400"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">
-                        Hedef Üretim Hattı:
-                      </label>
+                      <label className="block text-xs font-medium text-zinc-600 mb-1">Hedef Üretim Hattı</label>
                       <select
                         value={exitLine}
                         onChange={(e) => setExitLine(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2 text-xs text-zinc-900"
                       >
-                        <option value="Kaşar Peynir Hattı">Kaşar Peynir Hattı</option>
-                        <option value="Beyaz Peynir Paketleme">Beyaz Peynir Paketleme</option>
-                        <option value="Tulum / Özel Peynir Hattı">Tulum / Özel Peynir Hattı</option>
+                        <option value="Kaşar Paketleme Hattı">Kaşar Paketleme Hattı</option>
+                        <option value="Beyaz Peynir Hattı">Beyaz Peynir Hattı</option>
+                        <option value="Tulum / Özel Seri">Tulum / Özel Seri</option>
                         <option value="Salamura Havuzu">Salamura Havuzu</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">
-                        Teslim Alan Usta / Personel:
-                      </label>
+                      <label className="block text-xs font-medium text-zinc-600 mb-1">Teslim Alan Usta</label>
                       <input
                         type="text"
                         value={exitPerson}
                         onChange={(e) => setExitPerson(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2 text-xs text-zinc-900"
                       />
                     </div>
-                  </div>
-
-                  <div className="bg-amber-950/20 border border-amber-500/30 p-3 rounded-xl text-xs text-amber-300 flex items-center gap-2">
-                    <Info className="w-4 h-4 flex-shrink-0" />
-                    <span>Onayladığınızda malzeme derhal sistem stoğundan düşülecektir.</span>
                   </div>
 
                   <div className="pt-2 flex justify-end gap-2">
                     <button
                       onClick={() => setShowSevkModal(false)}
-                      className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold"
+                      className="px-3.5 py-1.5 text-xs text-zinc-600"
                     >
                       Vazgeç
                     </button>
                     <button
                       onClick={handleConfirmExit}
-                      className="px-5 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold shadow-md shadow-amber-900/40"
+                      className="px-4 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium shadow-xs transition"
                     >
-                      Çıkışı Onayla (-Stok Düş)
+                      Çıkışı Onayla
                     </button>
                   </div>
                 </>
               ) : (
-                /* SEKME 2: ÜRETİMDEN İADE AL & FİRE HESAPLA */
+                /* İADE VE FİRE FORMU */
                 <>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">
-                        Hatta Verilen Miktar:
-                      </label>
+                      <label className="block text-xs font-medium text-zinc-600 mb-1">Hatta Verilen</label>
                       <input
                         type="number"
                         value={returnIssuedQty}
                         onChange={(e) => setReturnIssuedQty(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white"
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2 text-xs text-zinc-900 font-mono"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">
-                        Sağlam Dönen Miktar:
-                      </label>
+                      <label className="block text-xs font-medium text-zinc-600 mb-1">Sağlam Dönen</label>
                       <input
                         type="number"
                         value={returnGoodQty}
                         onChange={(e) => setReturnGoodQty(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white"
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2 text-xs text-zinc-900 font-mono"
                       />
                     </div>
                   </div>
 
-                  {/* OTOMATİK HESAPLANAN FİRE KUTUSU */}
-                  <div className="bg-red-950/40 border border-red-500/50 p-3.5 rounded-xl text-xs space-y-1">
-                    <div className="flex items-center justify-between text-red-300">
-                      <span className="font-semibold flex items-center gap-1.5">
-                        <TrendingDown className="w-4 h-4 text-red-400" />
-                        Hesaplanan Fire / Zayiat:
-                      </span>
-                      <strong className="text-base font-extrabold text-red-400">
-                        {calculatedWaste} Adet/Birim
-                      </strong>
+                  {/* OTOMATİK HESAPLANAN FİRE KARTÇIĞI */}
+                  <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200/80 flex items-center justify-between text-xs">
+                    <div>
+                      <div className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider">
+                        Otomatik Hesaplanan Fire
+                      </div>
+                      <div className="text-[11px] text-zinc-400 mt-0.5">
+                        Verilen ({returnIssuedQty}) - Sağlam ({returnGoodQty})
+                      </div>
                     </div>
-                    <p className="text-[11px] text-slate-400">
-                      (Verilen: {returnIssuedQty} - Sağlam İade: {returnGoodQty} = Fire:{' '}
-                      {calculatedWaste})
-                    </p>
+                    <div className="font-mono text-base font-bold text-rose-600">
+                      {calculatedWaste} Adet
+                    </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
-                      Fire / Hasar Sebebi:
-                    </label>
+                    <label className="block text-xs font-medium text-zinc-600 mb-1">Fire / Hasar Nedeni</label>
                     <select
                       value={wasteReason}
                       onChange={(e) => setWasteReason(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                      className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2 text-xs text-zinc-900"
                     >
                       <option value="Hatta Ezilme / Vakum Kaçağı">Hatta Ezilme / Vakum Kaçağı</option>
                       <option value="Koli / Kutu Yırtılması">Koli / Kutu Yırtılması</option>
@@ -1106,13 +1124,13 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                   <div className="pt-2 flex justify-end gap-2">
                     <button
                       onClick={() => setShowSevkModal(false)}
-                      className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold"
+                      className="px-3.5 py-1.5 text-xs text-zinc-600"
                     >
                       Vazgeç
                     </button>
                     <button
                       onClick={handleConfirmReturn}
-                      className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-900/40"
+                      className="px-4 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium shadow-xs transition"
                     >
                       Sağlamı Stoğa Al & Fireyi Kaydet
                     </button>
@@ -1125,87 +1143,65 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
       )}
 
       {/* ========================================================================= */}
-      {/* 5. MOBİL GÖRÜNÜM & KAMERA / QR TARAYICI SİMÜLASYONU */}
+      {/* 5. MOBİL TARAYICI MOCKUP (MINIMALIST & GERÇEKÇİ ÇERÇEVE) */}
       {/* ========================================================================= */}
-
-      {/* Sağ Altta Yüzen Mobil Simülatör Butonu */}
-      <div className="fixed bottom-6 right-6 z-40">
-        <button
-          onClick={() => {
-            setMobileScannedItem(materials.find((m) => m.id === 'AMB-001') || materials[0]);
-            setShowMobileModal(true);
-          }}
-          className="flex items-center gap-2 px-4 py-3 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold shadow-2xl shadow-indigo-500/50 transition-all transform hover:scale-105 active:scale-95 border border-indigo-400/40"
-        >
-          <Smartphone className="w-5 h-5 animate-bounce" />
-          <span>📱 Mobil QR Tarayıcı Simülasyonu</span>
-        </button>
-      </div>
-
-      {/* MOBİL TELEFON MOCKUP MODALI */}
       {showMobileModal && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3">
-          <div className="relative w-full max-w-[340px] bg-slate-950 border-4 border-slate-700 rounded-[38px] shadow-2xl p-4 flex flex-col items-center overflow-hidden">
-            {/* Telefon Ahizesi ve Kamera Çentiği */}
-            <div className="w-28 h-4 bg-slate-800 rounded-full mb-3 flex items-center justify-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-slate-900"></div>
-              <div className="w-8 h-1.5 rounded-full bg-slate-900"></div>
+        <div className="fixed inset-0 z-50 bg-zinc-950/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="relative w-full max-w-[320px] bg-zinc-950 border border-zinc-800 rounded-[36px] shadow-2xl p-4 flex flex-col items-center text-white overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+            {/* Dynamic Island / Kamera Çentiği */}
+            <div className="w-20 h-4 bg-zinc-900 rounded-full mb-2 flex items-center justify-center">
+              <div className="w-2 h-2 rounded-full bg-zinc-950"></div>
             </div>
 
-            {/* Kapat Butonu */}
             <button
               onClick={() => setShowMobileModal(false)}
-              className="absolute top-4 right-5 text-slate-400 hover:text-white p-1"
+              className="absolute top-4 right-4 text-zinc-400 hover:text-white p-1"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
 
-            {/* Telefon Ekran Başlığı */}
-            <div className="w-full text-center pb-2 border-b border-slate-800">
-              <span className="text-[11px] font-bold text-amber-400">📱 El Terminali / Kamera Vizörü</span>
-              <p className="text-[9px] text-slate-400">Karekod Çerçevesi Otomatik Okunuyor</p>
+            {/* Üst Bilgi */}
+            <div className="w-full text-center pb-2 border-b border-zinc-800">
+              <span className="text-[11px] font-semibold text-zinc-200">El Terminali QR Vizörü</span>
+              <p className="text-[9px] text-zinc-500">Kamera çerçeveyi otomatik odaklar</p>
             </div>
 
-            {/* VİZÖR & LAZER ANİMASYONU */}
-            <div className="relative w-full h-44 bg-slate-900 rounded-2xl my-3 border-2 border-dashed border-amber-500/60 overflow-hidden flex flex-col items-center justify-center">
-              {/* Hareketli Lazer Çizgisi */}
-              <div className="absolute inset-x-0 h-0.5 bg-red-500 shadow-[0_0_12px_#ef4444] animate-pulse top-1/2 -translate-y-1/2"></div>
+            {/* Vizör Ekranı */}
+            <div className="relative w-full h-40 bg-zinc-900/90 rounded-2xl my-3 border border-zinc-800 flex flex-col items-center justify-center overflow-hidden">
+              {/* İnce Lazer Çizgisi */}
+              <div className="absolute inset-x-0 h-0.5 bg-emerald-500 shadow-[0_0_8px_#10b981] top-1/2 -translate-y-1/2 animate-pulse"></div>
 
-              {/* Köşe Hedef İşaretleri */}
-              <div className="absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-amber-400"></div>
-              <div className="absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-amber-400"></div>
-              <div className="absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-amber-400"></div>
-              <div className="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-amber-400"></div>
+              {/* Köşe Çizgileri */}
+              <div className="absolute top-3 left-3 w-3 h-3 border-t-2 border-l-2 border-emerald-400"></div>
+              <div className="absolute top-3 right-3 w-3 h-3 border-t-2 border-r-2 border-emerald-400"></div>
+              <div className="absolute bottom-3 left-3 w-3 h-3 border-b-2 border-l-2 border-emerald-400"></div>
+              <div className="absolute bottom-3 right-3 w-3 h-3 border-b-2 border-r-2 border-emerald-400"></div>
 
-              {/* QR Kodu Temsili */}
-              <div className="w-20 h-20 bg-white p-1 rounded shadow flex flex-col items-center justify-center">
-                <QrCode className="w-16 h-16 text-slate-900" />
+              <div className="w-16 h-16 bg-white p-1 rounded flex items-center justify-center">
+                <QrCode className="w-14 h-14 text-zinc-900" />
               </div>
-              <span className="text-[9px] text-slate-400 font-mono mt-1">PRD-{mobileScannedItem?.id}</span>
+              <span className="text-[9px] text-zinc-400 font-mono mt-1">PRD-{mobileScannedItem?.id}</span>
             </div>
 
-            {/* Simüle Okutma Seçenekleri */}
+            {/* Hızlı Seçim Butonları */}
             <div className="w-full mb-2">
-              <label className="text-[10px] font-semibold text-slate-400 block mb-1">
-                Örnek Ürün Barkodu Okut:
-              </label>
               <div className="grid grid-cols-2 gap-1.5">
                 <button
                   onClick={() => setMobileScannedItem(materials.find((m) => m.id === 'AMB-001') || null)}
-                  className={`text-[10px] py-1 px-1.5 rounded font-semibold truncate border ${
+                  className={`text-[10px] py-1 px-1.5 rounded font-medium truncate border transition ${
                     mobileScannedItem?.id === 'AMB-001'
-                      ? 'bg-amber-500 text-slate-950 border-amber-400'
-                      : 'bg-slate-900 text-slate-300 border-slate-800'
+                      ? 'bg-zinc-800 text-white border-zinc-600'
+                      : 'bg-zinc-900/80 text-zinc-400 border-zinc-800'
                   }`}
                 >
                   500gr Kase (Kritik)
                 </button>
                 <button
                   onClick={() => setMobileScannedItem(materials.find((m) => m.id === 'HAM-002') || null)}
-                  className={`text-[10px] py-1 px-1.5 rounded font-semibold truncate border ${
+                  className={`text-[10px] py-1 px-1.5 rounded font-medium truncate border transition ${
                     mobileScannedItem?.id === 'HAM-002'
-                      ? 'bg-amber-500 text-slate-950 border-amber-400'
-                      : 'bg-slate-900 text-slate-300 border-slate-800'
+                      ? 'bg-zinc-800 text-white border-zinc-600'
+                      : 'bg-zinc-900/80 text-zinc-400 border-zinc-800'
                   }`}
                 >
                   Peynir Mayası
@@ -1213,43 +1209,42 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
               </div>
             </div>
 
-            {/* Taranan Ürün Detayı & Aksiyon */}
+            {/* Taranan Ürün Özeti & Aksiyon */}
             {mobileScannedItem && (
-              <div className="w-full bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 mb-2 text-xs">
-                <div className="font-bold text-white text-xs truncate">{mobileScannedItem.name}</div>
-                <div className="flex justify-between items-center text-[10px] text-slate-400 mt-1">
+              <div className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 mb-2 text-xs">
+                <div className="font-medium text-zinc-200 truncate">{mobileScannedItem.name}</div>
+                <div className="flex justify-between items-center text-[10px] text-zinc-400 mt-1">
                   <span>Mevcut:</span>
-                  <strong className="text-amber-300">
+                  <strong className="font-mono text-zinc-100">
                     {mobileScannedItem.currentStock} {mobileScannedItem.unit}
                   </strong>
                 </div>
 
                 {mobileFeedback && (
-                  <div className="mt-1 text-[10px] text-emerald-400 font-bold text-center bg-emerald-950/60 p-1 rounded border border-emerald-500/30">
+                  <div className="mt-1 text-[10px] text-emerald-400 font-medium text-center bg-emerald-950/40 p-1 rounded border border-emerald-800/40">
                     {mobileFeedback}
                   </div>
                 )}
 
-                {/* Mobil Hızlı Aksiyon Butonları */}
                 <div className="grid grid-cols-2 gap-1.5 mt-2">
                   <button
                     onClick={() => handleMobileScanAction('EXIT')}
-                    className="py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-white font-bold text-[10px] text-center"
+                    className="py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-medium text-[10px]"
                   >
-                    Üretime Çık (-20)
+                    Sevk Et (-20)
                   </button>
                   <button
                     onClick={() => handleMobileScanAction('RETURN')}
-                    className="py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] text-center"
+                    className="py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-medium text-[10px]"
                   >
-                    Sağlam İade (+15)
+                    İade Al (+15)
                   </button>
                 </div>
               </div>
             )}
 
-            <div className="text-[9px] text-slate-500 text-center">
-              Telefonda yapılan işlemler arkada ana tabloyu anında günceller.
+            <div className="text-[9px] text-zinc-500 text-center">
+              Aksiyonlar arka plandaki ana tabloyu anında günceller.
             </div>
           </div>
         </div>
