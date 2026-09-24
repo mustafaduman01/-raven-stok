@@ -1,4 +1,4 @@
-# 🧀 Peynir Üretim Tesisi — Stok, Ambalaj ve Fire Takip Paneli (Prototip)
+# 🧀 RAVEN STOK — Peynir Üretim Tesisi Stok, Ambalaj ve Fire Takip Paneli (Prototip)
 
 Bu proje, modern bir peynir üretim tesisinin **hammadde, ambalaj, mal kabul, üretime sevk, iade, fire ve termal QR etiket yönetimini** simüle eden kurumsal web prototipidir.
 
@@ -72,18 +72,18 @@ Projeyi GitHub'a yükleyip tek tıkla canlıya almak için:
 # Git başlatın
 git init
 git add .
-git commit -m "feat: Peynir Stok ve Fire Takip Paneli prototipi"
+git commit -m "feat: Raven Stok - Peynir Takip Paneli prototipi"
 
 # GitHub reponuzu bağlayın (kendi repo linkinizi yazın)
 git branch -M main
-git remote add origin https://github.com/KULLANICI_ADINIZ/peynir-stok-prototip.git
+git remote add origin https://github.com/KULLANICI_ADINIZ/raven-stok.git
 git push -u origin main
 ```
 
 ### GitHub Pages'i Aktif Etme:
 1. GitHub reponuzda **Settings** > **Pages** menüsüne gidin.
 2. **Build and deployment > Source** kısmını **GitHub Actions** olarak seçin.
-3. Projede hazır bulunan `.github/workflows/deploy.yml` sayesinde her `git push` işleminde siteniz otomatik olarak `https://<kullanici-adiniz>.github.io/peynir-stok-prototip/` adresinde canlıya alınacaktır!
+3. Projede hazır bulunan `.github/workflows/deploy.yml` sayesinde her `git push` işleminde siteniz otomatik olarak `https://<kullanici-adiniz>.github.io/raven-stok/` adresinde canlıya alınacaktır!
 
 ---
 

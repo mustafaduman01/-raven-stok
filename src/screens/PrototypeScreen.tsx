@@ -422,13 +422,13 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-base sm:text-lg font-bold text-white tracking-tight">
-                  SÜTÇÜOĞLU PEYNİRCİLİK
+                  RAVEN STOK
                 </h1>
                 <span className="text-[10px] uppercase font-extrabold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
                   Prototip Simülatörü
                 </span>
               </div>
-              <p className="text-xs text-slate-400">Hammadde, Ambalaj & Fire Takip Paneli</p>
+              <p className="text-xs text-slate-400">Peynir Üretim Tesisi — Stok & Fire Takip Paneli</p>
             </div>
           </div>
 
@@ -859,7 +859,7 @@ export const PrototypeScreen: React.FC<{ onSwitchToSystem?: () => void }> = ({ o
                   {/* Etiket Kartı */}
                   <div className="w-[280px] h-[168px] bg-white text-black p-2.5 rounded shadow-lg border border-slate-300 flex flex-col justify-between font-mono text-[9px] leading-tight select-none">
                     <div className="border-b border-black pb-1 flex justify-between items-center">
-                      <span className="font-extrabold text-[10px]">SÜTÇÜOĞLU PEYNİR</span>
+                      <span className="font-extrabold text-[10px]">RAVEN STOK SİSTEMİ</span>
                       <span className="text-[8px] bg-black text-white px-1 font-bold">KABUL ONAYLI</span>
                     </div>
 

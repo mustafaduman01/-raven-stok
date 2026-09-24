@@ -43,10 +43,10 @@ export const LoginScreen: React.FC<{ onOpenPrototype?: () => void }> = ({ onOpen
             🧀
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">
-            Peynir Üretim Tesisi
+            Raven Stok
           </h1>
           <p className="text-sm text-slate-400">
-            Stok Takip ve Depo Yönetim Sistemi
+            Peynir Üretim Tesisi Depo & Stok Takip Sistemi
           </p>
         </div>
 
