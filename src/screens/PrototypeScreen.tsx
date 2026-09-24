@@ -313,7 +313,15 @@ export const PrototypeScreen: React.FC = () => {
 
     setShowMalKabulModal(false);
     setShowPreviewInsideModal(false);
-    alert(`✅ ${targetMat?.name} için ${qtyNum} ${targetMat?.unit} başarıyla depoya eklendi ve QR etiket onaylandı.`);
+    if (targetMat) {
+      setSelectedMaterial(targetMat);
+    }
+    setShowPrintLabelModal(true);
+
+    // Otomatik yazıcı penceresini tetikle
+    setTimeout(() => {
+      window.print();
+    }, 350);
   };
 
   // 2. Üretime Sevk Çıkışı (Stoğu Azaltır)
@@ -997,7 +1005,7 @@ export const PrototypeScreen: React.FC = () => {
             <div className="p-6 flex flex-col items-center space-y-4">
               {/* TERMAL ETİKET (50mm x 30mm Gerçek Boyut Tasarımı) */}
               <div
-                id="printable-label"
+                id="printable-area"
                 className="w-[280px] h-[168px] bg-white text-zinc-950 p-3 rounded-lg border-2 border-zinc-900 shadow-md flex flex-col justify-between font-mono select-none"
               >
                 <div className="border-b-2 border-zinc-900 pb-1 flex justify-between items-center text-[10px]">
@@ -1202,9 +1210,10 @@ export const PrototypeScreen: React.FC = () => {
               </button>
               <button
                 onClick={handleConfirmMalKabul}
-                className="px-4 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium shadow-xs transition"
+                className="px-4 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium shadow-xs transition flex items-center gap-1.5"
               >
-                Stoğa Ekle & QR Onayla
+                <Printer className="w-3.5 h-3.5" />
+                <span>Stoğa Ekle & Etiketi Bas</span>
               </button>
             </div>
           </div>
